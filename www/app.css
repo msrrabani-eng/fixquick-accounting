@@ -342,3 +342,10 @@ details.card>summary{cursor:pointer;list-style:none}details.card>summary::-webki
 
 /* v013: explicitly visible safe exit on draft-backed accounting forms */
 .draft-cancel{margin-top:12px!important;margin-bottom:4px;color:var(--red)!important;border-color:var(--line)!important}
+
+/* v014 — offline assistant / risk review */
+.fq-smart-actions{margin:10px 0}.fq-chat-history{display:flex;flex-direction:column;gap:12px;min-height:160px;max-height:48vh;overflow-y:auto;margin:12px 0}
+.fq-msg{padding:12px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.85}
+.fq-user{background:#eef3fb;align-self:flex-start;max-width:90%;color:#243b53}
+.fq-bot{background:#f6f7f8;border:1px solid var(--line);align-self:stretch}
+.fq-msg ul{margin:8px 0;padding-right:18px}.fq-msg .chips{margin-top:9px}

@@ -283,6 +283,7 @@ function chequeForm(c, o) {
     e.preventDefault(); const f = e.target, due = readDate(f, 'due'), date = readDate(f, 'date'), amount = Core.parseMoney(f.amount.value);
     if (!pid) return toast('شخص را انتخاب کنید.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); if (!due) return toast('تاریخ سررسید نامعتبر است.', true); if (!date) return toast('تاریخ ثبت نامعتبر است.', true);
     const d = { cycle: true, kind: 'cheque', direction: dir, personId: pid, invoiceId, amount, dueDate: due, date, serial: Core.toEn(f.serial.value), bank: f.bank.value, branch: f.branch.value, drawer: f.drawer.value, acct: f.acct ? +f.acct.value : null, note: f.note.value, title: '' };
+    if (!(await smartGuardConfirm('cheque',d,c&&c.id))) return;
     if (await done(c ? Core.editCheque(S, c.id, d) : Core.addCheque(S, d), c ? 'چک اصلاح شد.' : 'چک ثبت شد.')) {chequeDraft.clear(); sh.close();}
   };
 }
