@@ -997,7 +997,8 @@ function routeAllowed(page) {
   if (page === 'kardex') return can('cost');
   if (page === 'edit') return can('edit');
   if (page === 'new' && (arg === 'purchase' || arg === 'purchase_return')) return can('purchase');
-  return true;}
+  return true;
+}
 const ACT_PERM = { openImport: d => (d.k === 'stock' ? 'warehouse' : 'people'), stmtRange: 'balances', vchNew: 'money', coaAdd: 'admin', coaRen: 'admin', coaDel: 'admin', tafNew: 'admin', tafEdit: 'admin', fyClose: 'admin', fyReopen: 'admin', whNew: 'warehouse', whEdit: 'warehouse', whTxNew: 'warehouse', reconGo: 'money', acctNew: 'money', acctEdit: 'money', acctXfer: 'money', acctTx: 'money', acctExp: 'money', reconAdd: 'money', reconSave: 'money', addPerson: 'people', editPerson: 'people', archive: 'people', delPerson: 'people', bulkPeople: 'people', txForm: 'money', quickTx: 'money', transfer: 'money', payInv: 'money', addCheque: 'money', personChequeReceive: 'money', personChequePay: 'money', spendChequeHome: 'money', chqDone: 'money', chqReopen: 'edit', chqEdit: 'edit', chqDel: 'edit', addExpense: 'money', delInv: 'edit', addProduct: 'warehouse', bulkProducts: 'warehouse', whTools: 'warehouse', prodImport: 'warehouse', csvPeople: 'balances', csvStmt: 'balances', shareStmt: 'balances', csvLedger: 'reports', csvInvoices: 'reports', backup: 'backup', saveLocal: 'backup', restore: 'backup', autoRestore: 'backup', plGo: 'reports', resetData: 'admin', wipe: 'admin', activate: 'admin', userEdit: 'admin', lockClear: 'admin', audit: 'admin' };
 function actAllowed(el) {
   if (isAdmin()) return true; const a = el.dataset.act, np = ACT_PERM[a], need = typeof np === 'function' ? np(el.dataset) : np;
