@@ -68,13 +68,13 @@ const Drafts = (() => {
     const ctl = {
       kind, form,
       save() {
-        if (halted) return;
+        if (halted) return false;
         const obj = snapshot(), body = JSON.stringify(obj);
-        if (!previous && body === initial) return; // never save untouched empty forms
+        if (!previous && body === initial) return true; // untouched form has nothing to preserve
         const val = JSON.stringify({version:VERSION,at:Date.now(),...obj});
-        if (val.length > MAX) { if (typeof toast === 'function') toast('پیش‌نویس بسیار بزرگ است؛ برخی اقلام را کوتاه کنید.',true); return; }
-        try { localStorage.setItem(storageKey(kind), val); }
-        catch (e) { if (typeof toast === 'function') toast('ذخیره پیش‌نویس ناموفق بود؛ فضای گوشی را بررسی کنید.',true); }
+        if (val.length > MAX) { if (typeof toast === 'function') toast('پیش‌نویس بسیار بزرگ است؛ برخی اقلام را کوتاه کنید.',true); return false; }
+        try { localStorage.setItem(storageKey(kind), val); return true; }
+        catch (e) { if (typeof toast === 'function') toast('ذخیره پیش‌نویس ناموفق بود؛ فضای گوشی را بررسی کنید.',true); return false; }
       },
       touch() { if (halted) return; clearTimeout(timer); timer = setTimeout(() => ctl.save(), 100); },
       clear() { halted = true; clearTimeout(timer); discard(kind); active.delete(ctl); controllers.delete(form); },
@@ -87,6 +87,26 @@ const Drafts = (() => {
     form.addEventListener('click',()=>ctl.touch(),true);
     return ctl;
   }
+  // Offer explicit choices for abandoning a workflow. No accounting entry is created.
+  // The destructive option removes only the current operation's LOCAL draft.
+  function requestExit(form, leave, title) {
+    const ctl = controllers.get(form);
+    if (!ctl) return false;
+    const confirm = sheet(title || 'لغو عملیات',
+      '<p class="msg">این عملیات هنوز ثبت نشده است. می‌خواهید پیش‌نویس برای ادامه بعدی باقی بماند یا حذف شود؟</p>' +
+      '<button type="button" class="btn blue" id="draft-exit-keep">خروج و حفظ پیش‌نویس</button>' +
+      '<button type="button" class="btn ghost red" id="draft-exit-delete">لغو عملیات و حذف پیش‌نویس</button>' +
+      '<button type="button" class="btn ghost" data-close>ادامه ویرایش</button>' +
+      '<p class="hint">حذف پیش‌نویس، هیچ فاکتور ثبت‌شده، موجودی انبار یا تراکنش قطعی را تغییر نمی‌دهد.</p>');
+    confirm.q('#draft-exit-keep').onclick = () => {
+      if (ctl.save() === false) { confirm.close(); return; } // never leave after a failed save
+      confirm.close(); if (typeof leave === 'function') leave();
+    };
+    confirm.q('#draft-exit-delete').onclick = () => {
+      ctl.clear(); confirm.close(); if (typeof leave === 'function') leave();
+    };
+    return true;
+  }
   function touch(form) { const c = controllers.get(form); if(c) c.touch(); }
   function saved(form) { const c = controllers.get(form); if (c) c.save(); }
   function clear(form) { const c = controllers.get(form); if(c) c.clear(); }
@@ -97,6 +117,13 @@ const Drafts = (() => {
     sh.o.onClose = () => { c.detach(); if (prev) prev(); };
     const close = sh.close;
     sh.close = function(silent) { if (!silent && c) c.detach(); close.call(sh,silent); };
+    // Every draft-backed purchase/payment/cheque/transfer dialog has a visible Cancel.
+    // The × button still provides the fast, non-destructive save-and-close behavior.
+    const cancel = document.createElement('button');
+    cancel.type = 'button'; cancel.className = 'btn ghost draft-cancel';
+    cancel.textContent = 'لغو / خروج از عملیات';
+    cancel.addEventListener('click', () => requestExit(form, () => sh.close(), 'لغو عملیات'));
+    form.appendChild(cancel);
     return c;
   }
   function flushPage() { for(const c of Array.from(active)) if(c.form && c.form.closest('#main')) c.detach(); }
@@ -105,6 +132,6 @@ const Drafts = (() => {
     window.addEventListener('pagehide',flushAll);
     document.addEventListener('visibilitychange',()=>{ if(document.visibilityState === 'hidden') flushAll(); });
   }
-  return {get,list,discard,bind,attachSheet,touch,saved,clear,flushPage,flushAll,captureFields,restoreFields};
+  return {get,list,discard,bind,attachSheet,requestExit,touch,saved,clear,flushPage,flushAll,captureFields,restoreFields};
 })();
 if(typeof module !== 'undefined' && module.exports) module.exports = Drafts;

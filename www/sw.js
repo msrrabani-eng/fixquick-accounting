@@ -1,4 +1,4 @@
-const V = 'fq-acc-vol012-safe-drafts';
+const V = 'fq-acc-vol013-cancel-drafts';
 const FILES = ['./', 'index.html', 'app.css', 'diag.js', 'core.js', 'smartsearch.js', 'base.js', 'drafts.js', 'pages.js', 'print.js', 'license.js', 'qrcode.js', 'jsqr.js', 'scan.js', 'icons.js', 'access.js', 'search.js', 'help.js', 'accounts.js', 'reports.js', 'ledger.js', 'logo.png', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
