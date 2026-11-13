@@ -339,3 +339,6 @@ details.card>summary{cursor:pointer;list-style:none}details.card>summary::-webki
 .draft-tools{margin:8px 0 14px}.draft-tools .btn{height:auto;min-height:44px;padding:9px 6px;font-size:calc(12px * var(--fs,1))}
 .draft-return{margin:0 0 12px;font-size:calc(13px * var(--fs,1));height:auto;min-height:46px;padding:8px 12px}
 .draft-item .lnk{text-align:right;flex:1}.draft-item .mini{flex:none}.draft-item .lnk small{font-weight:400;color:var(--mut)}
+
+/* v013: explicitly visible safe exit on draft-backed accounting forms */
+.draft-cancel{margin-top:12px!important;margin-bottom:4px;color:var(--red)!important;border-color:var(--line)!important}
