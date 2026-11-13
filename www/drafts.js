@@ -99,7 +99,7 @@ const Drafts = (() => {
       '<button type="button" class="btn ghost" data-close>ادامه ویرایش</button>' +
       '<p class="hint">حذف پیش‌نویس، هیچ فاکتور ثبت‌شده، موجودی انبار یا تراکنش قطعی را تغییر نمی‌دهد.</p>');
     confirm.q('#draft-exit-keep').onclick = () => {
-      if (ctl.save() === false) { confirm.close(); return; }
+      if (ctl.save() === false) { confirm.close(); return; } // never leave after a failed save
       confirm.close(); if (typeof leave === 'function') leave();
     };
     confirm.q('#draft-exit-delete').onclick = () => {
