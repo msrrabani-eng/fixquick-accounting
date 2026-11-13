@@ -202,7 +202,7 @@ function txForm(type, personId, tx, pre) {
     (isPay && !tx ? '<div class="receipt-zone"><b>فیش بانکی هوشمند</b><p class="hint">عکس بگیرید یا از گالری انتخاب کنید. اطلاعات استخراج‌شده قبل از ثبت باید تأیید شوند.</p>' +
       '<div class="row2"><button type="button" class="btn ghost" id="tf-camera">📷 گرفتن عکس</button><button type="button" class="btn ghost" id="tf-gallery">🖼 انتخاب از گالری</button></div>' +
       '<input id="tf-camera-file" type="file" accept="image/*" capture="environment" hidden><input id="tf-gallery-file" type="file" accept="image/*" hidden>' +
-      '<div id="tf-ocr-status" class="hint" role="status" aria-live="polite"></div>' +
+      '<div id="tf-ocr-status" class="hint" role="status" aria-live="polite"></div><button type="button" class="btn ghost sm" id="tf-persian-ocr">خواندن تکمیلی متن فارسی (کندتر)</button>' +
       '<details class="receipt-manual"><summary>متن فیش / اصلاح دستی اطلاعات</summary><textarea id="tf-ocr-text" class="inp" rows="5" placeholder="متن فیش بانکی را اینجا وارد یا اصلاح کنید…"></textarea><button type="button" id="tf-ocr-analyze" class="btn ghost sm">بررسی متن فیش</button></details>' +
       '<div id="tf-ocr-review" hidden></div></div>' : '') + '<button class="btn blue" type="submit">ثبت</button></form>');
   const f = sh.q('#tf'); if (tx && f.kind) f.kind.value = tx.kind;
@@ -246,11 +246,13 @@ function txForm(type, personId, tx, pre) {
       };
     };
     sh.q('#tf-ocr-analyze').onclick = () => analyzeText(rawText.value);
-    // Warm the OCR engine before the user selects a photo. Non-blocking.
-    ReceiptOCR.prewarm();
+    // Native APK never prewarms WASM. Browser-only builds may initialize in the background.
+    if (!ReceiptOCR.nativePlugin()) ReceiptOCR.prewarm();
     let photoRun = 0;
-    const processPhoto = async input => {
-      const file = input.files && input.files[0]; input.value = ''; if (!file) return;
+    let selectedPhoto = null;
+    const processPhoto = async (input, persianMode = false) => {
+      const file = persianMode ? selectedPhoto : (input.files && input.files[0]); if (!persianMode) input.value = ''; if (!file) return;
+      selectedPhoto = file;
       const runId = ++photoRun;
       rawText.dataset.userEdited = '0';
       review.hidden = true; verifiedReceipt = null;
@@ -263,7 +265,7 @@ function txForm(type, personId, tx, pre) {
           if (runId !== photoRun || !sh.el.isConnected) return;
           setStatus('پردازش بیشتر از ۲ ثانیه طول کشید. می‌توانید هم‌زمان متن را دستی وارد کنید؛ نتیجه عکس پس از آماده‌شدن نمایش داده می‌شود.');
         }, 2000);
-        const result = await ReceiptOCR.recognize(file, (msg, progress) => {
+        const result = await (persianMode ? ReceiptOCR.recognize : ReceiptOCR.fastRecognize)(file, (msg, progress) => {
           if (runId !== photoRun || !sh.el.isConnected) return;
           // Initialization is not progress; 0% during model loading is misleading.
           if (msg === 'خواندن متن عکس' && progress > 0) setStatus('در حال خواندن متن فیش… ' + fa(Math.round(progress * 100)) + '٪');
@@ -275,11 +277,11 @@ function txForm(type, personId, tx, pre) {
           return;
         }
         rawText.value = result.text;
-        setStatus('خواندن عکس انجام شد. لطفاً اطلاعات را بررسی و تأیید کنید.');
+        setStatus('خواندن ' + (persianMode ? 'تکمیلی فارسی' : 'سریع عددی') + ' انجام شد. لطفاً اطلاعات را بررسی و تأیید کنید.');
         analyzeText(result.text);
       } catch (err) {
         if (runId === photoRun && sh.el.isConnected)
-          setStatus('خواندن عکس انجام نشد: ' + (err.message || String(err)) + '؛ متن فیش را دستی وارد کنید.');
+          setStatus('خواندن عکس انجام نشد: ' + (err.message || String(err)) + '؛ می‌توانید OCR فارسی تکمیلی را انتخاب یا اطلاعات را دستی وارد کنید.');
       } finally { clearTimeout(slowTimer); }
     };
     const camera = sh.q('#tf-camera-file'), gallery = sh.q('#tf-gallery-file');
@@ -287,6 +289,7 @@ function txForm(type, personId, tx, pre) {
     sh.q('#tf-gallery').onclick = () => gallery.click();
     camera.onchange = () => processPhoto(camera);
     gallery.onchange = () => processPhoto(gallery);
+    sh.q('#tf-persian-ocr').onclick = () => { if (!selectedPhoto) return setStatus('ابتدا عکس فیش را از دوربین یا گالری انتخاب کنید.'); processPhoto(null, true); };
     rawText.oninput = () => { rawText.dataset.userEdited = '1'; verifiedReceipt = null; review.hidden = true; setStatus('متن فیش تغییر کرد؛ دوباره «بررسی متن فیش» را بزنید.'); };
   }
   f.onsubmit = async e => {

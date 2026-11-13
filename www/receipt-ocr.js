@@ -1,4 +1,4 @@
-/* Fix Quick v007 — local-only OCR of camera/gallery receipt images.
+/* Fix Quick v008 — native fast OCR plus optional Persian OCR of camera/gallery receipt images.
  * No uploads, no storage and no automatic accounting writes.
  * The OCR runtime and Persian+English language data are bundled in the APK.
  */
@@ -32,6 +32,35 @@
   }
   // Keep the expensive offline language initialization cached for the session.
   // A cold start can take longer than two seconds on real devices.
+  function nativePlugin() {
+    return root.Capacitor && root.Capacitor.isNativePlatform && root.Capacitor.isNativePlatform() &&
+      root.Capacitor.Plugins && root.Capacitor.Plugins.FastReceiptOCR;
+  }
+  function readBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(Error('عکس قابل خواندن نیست.'));
+      reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+      reader.readAsDataURL(blob);
+    });
+  }
+  // Fast native pass: no WebAssembly worker, no language download, no backend.
+  async function fastRecognize(file, onProgress) {
+    validateFile(file);
+    const plugin = nativePlugin();
+    if (!plugin || typeof plugin.recognize !== 'function') throw Error('موتور سریع در این نسخه APK نصب نشده است.');
+    if (onProgress) onProgress('خواندن سریع اطلاعات عددی', 0);
+    const blob = await resize(file);
+    const base64 = await readBase64(blob);
+    let timeoutId;
+    const result = await Promise.race([
+      plugin.recognize({base64}),
+      new Promise((_, reject) => { timeoutId = setTimeout(() => reject(Error('تشخیص سریع زمان زیادی گرفت؛ متن فیش را دستی بررسی کنید.')), 4500); })
+    ]).finally(() => clearTimeout(timeoutId));
+    const found = String(result && result.text || '').trim();
+    if (!found) throw Error('در مرحله سریع، عدد یا متن لاتین قابل تشخیص نبود. برای متن فارسی از گزینه تکمیلی استفاده کنید.');
+    return {text:found, confidence:0, engine:'MLKit-Latin-OnDevice', durationMs:result.durationMs};
+  }
   let workerPromise = null;
   let queue = Promise.resolve();
   let prepared = false;
@@ -85,6 +114,6 @@
     prepared = false;
     try { const w = await p; await w.terminate(); } catch (_) {}
   }
-  root.ReceiptOCR = { recognize, prewarm, warmup, isReady, dispose, validateFile, MAX_IMAGE_BYTES };
+  root.ReceiptOCR = { recognize, fastRecognize, nativePlugin, prewarm, warmup, isReady, dispose, validateFile, MAX_IMAGE_BYTES };
   if (typeof module !== 'undefined' && module.exports) module.exports = { validateFile, MAX_IMAGE_BYTES };
 })(typeof window !== 'undefined' ? window : globalThis);

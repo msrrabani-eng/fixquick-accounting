@@ -33,6 +33,7 @@ jobs:
           node tests/vol005.test.js
           node tests/vol006.test.js
           node tests/vol007.test.js
+          node tests/vol008.test.js
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |
@@ -45,6 +46,9 @@ jobs:
 
       - name: Create Android project
         run: npx cap add android
+
+      - name: Install native fast OCR bridge (on-device ML Kit)
+        run: python3 tools/install_native_ocr.py
 
       - name: Permissions (camera for QR scanning, fingerprint, saving backups to Documents)
         run: |

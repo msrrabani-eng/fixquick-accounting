@@ -11,7 +11,7 @@ function check(name, fn) { try { fn(); passed++; } catch(e) { console.error('FAI
 check('camera capture available', () => assert.match(pages, /capture="environment"/));
 check('gallery input separate from camera', () => assert.match(pages, /id="tf-gallery-file"[^>]*accept="image\/\*"/));
 check('both person form types only', () => assert.match(pages, /isPay && !tx \?/));
-check('image OCR called on photo', () => assert.match(pages, /ReceiptOCR\.recognize\(file/));
+check('image OCR called on photo', () => assert.match(pages, /ReceiptOCR\.fastRecognize|ReceiptOCR\.recognize/));
 check('human confirmation to apply values', () => assert.match(pages, /tf-ocr-apply/));
 check('OCR does not call addTx directly', () => assert.doesNotMatch(fs.readFileSync(require('path').join(__dirname, '../www/receipt-ocr.js'), 'utf8'), /addTx\(/));
 check('registration calls existing accounting engine', () => assert.match(pages, /Core\.addTx\(S, \{ personId, type: t/));
