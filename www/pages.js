@@ -222,19 +222,26 @@ function txForm(type, personId, tx, pre) {
         '<div class="kv"><span>مبلغ</span><b>' + (r.amountRial ? esc(Core.toFa(String(r.amountRial))) + ' ریال' : 'نامشخص') + '</b>' +
         '<span>تاریخ</span><b>' + esc(fa(r.date || 'نامشخص')) + '</b><span>ساعت</span><b>' + esc(fa(r.time || 'نامشخص')) + '</b>' +
         '<span>وضعیت فیش</span><b>' + esc(({pending:'در انتظار / تأییدنشده',registered:'ثبت درخواست، وصول نامشخص',reported_success:'موفق طبق رسید؛ نیازمند تطبیق',unknown:'نامشخص'})[r.status]) + '</b><span>بانک مبدأ</span><b>' + esc(r.sourceBank || 'نامشخص') + '</b><span>بانک مقصد</span><b>' + esc(r.destinationBank || 'نامشخص') + '</b></div>' +
+        '<label class="fld"><span>مبلغ فیش (ریال، قابل اصلاح)</span><input class="inp ltr" inputmode="numeric" id="tf-ocr-amount" value="' + esc(r.amountRial || '') + '" placeholder="مثلاً 183000000"></label>' +
+        '<label class="fld"><span>تاریخ تراکنش (قابل اصلاح)</span><input class="inp ltr" id="tf-ocr-date" value="' + esc(r.date || '') + '" placeholder="1405/08/21"></label>' +
         '<label class="fld"><span>کد رهگیری (قابل اصلاح)</span><input class="inp ltr" id="tf-ocr-code" value="' + esc(r.trackingCode || '') + '" placeholder="کد رهگیری"></label>' +
         '<label class="fld"><span>ساعت (قابل اصلاح)</span><input class="inp ltr" id="tf-ocr-time" value="' + esc(r.time || '') + '" placeholder="مثلاً 14:05"></label>' +
         '<label class="fld"><span>بانک مبدأ (قابل اصلاح)</span><input class="inp" id="tf-ocr-source" value="' + esc(r.sourceBank || '') + '"></label>' +
         '<label class="fld"><span>بانک مقصد (قابل اصلاح)</span><input class="inp" id="tf-ocr-dest" value="' + esc(r.destinationBank || '') + '"></label>' +
         (r.warnings.length ? '<div class="receipt-warnings">' + r.warnings.map(x => '<p>⚠ ' + esc(x) + '</p>').join('') + '</div>' : '') +
         '<label class="fld"><span><input type="checkbox" id="tf-ocr-settled"> وصول وجه را مستقلاً از حساب مقصد یا گردش حساب تأیید کرده‌ام</span></label>' +
-        '<button type="button" class="btn green" id="tf-ocr-apply">تأیید اطلاعات و انتقال به فرم</button>'; 
+        '<button type="button" class="btn green" id="tf-ocr-apply">تأیید اطلاعات و انتقال به فرم</button>';
       sh.q('#tf-ocr-apply').onclick = () => {
         const trackingCode = Core.toEn(sh.q('#tf-ocr-code').value).replace(/\s/g, '').trim();
         const enteredAmount = Number(Core.toEn(sh.q('#tf-ocr-amount').value).replace(/[,٬،\s]/g, ''));
         if (!Number.isSafeInteger(enteredAmount) || enteredAmount <= 0) return toast('مبلغ ریالی فیش را بررسی کنید.', true);
-        f.amount.value = Core.fmtInput(enteredAmount); mwUpdate(f.amount);
+        // The main form uses the user's configured unit (rial or toman), while OCR always returns rial.
+        const formAmount = UNIT() === 'تومان' ? enteredAmount / 10 : enteredAmount;
+        if (!Number.isSafeInteger(formAmount)) return toast('مبلغ ریالی به تومان صحیح قابل تبدیل نیست.', true);
+        f.amount.value = Core.fmtInput(formAmount); mwUpdate(f.amount);
         const reviewedDate = Core.toEn(sh.q('#tf-ocr-date').value.trim());
+        if (!/^(?:1[34]\d{2}|20\d{2})\/(?:0?[1-9]|1[0-2])\/(?:0?[1-9]|[12]\d|3[01])$/.test(reviewedDate))
+          return toast('تاریخ فیش را به شکل 1405/08/21 وارد کنید.', true);
         if (reviewedDate) {
           if (/^1[34]\d{2}\//.test(reviewedDate)) f.date.value = fa(reviewedDate);
           else if (/^20\d{2}\//.test(reviewedDate)) {
@@ -250,7 +257,7 @@ function txForm(type, personId, tx, pre) {
       };
     };
     sh.q('#tf-ocr-analyze').onclick = () => analyzeText(rawText.value);
-    sh.q('#tf-ocr-paste').onclick = async () => { try { if (!navigator.clipboard || !navigator.clipboard.readText) throw Error('دسترسی کلیپ‌بورد موجود نیست'); const text = await navigator.clipboard.readText(); if (!text.trim()) throw Error('متن کپی‌شده خالی است'); rawText.value = text; rawText.dataset.userEdited = '1'; analyzeText(text); } catch (e) { setStatus('پیامک را کپی کرده و در کادر متن نگه‌دارید و Paste را انتخاب کنید؛ سپس «بررسی متن» را بزنید.'); rawText.focus(); } }; 
+    sh.q('#tf-ocr-paste').onclick = async () => { try { if (!navigator.clipboard || !navigator.clipboard.readText) throw Error('دسترسی کلیپ‌بورد موجود نیست'); const text = await navigator.clipboard.readText(); if (!text.trim()) throw Error('متن کپی‌شده خالی است'); rawText.value = text; rawText.dataset.userEdited = '1'; analyzeText(text); } catch (e) { setStatus('پیامک را کپی کرده و در کادر متن نگه‌دارید و Paste را انتخاب کنید؛ سپس «بررسی متن» را بزنید.'); rawText.focus(); } };
     // Native APK never prewarms WASM. Browser-only builds may initialize in the background.
     if (!ReceiptOCR.nativePlugin()) ReceiptOCR.prewarm();
     let photoRun = 0;
@@ -282,8 +289,13 @@ function txForm(type, personId, tx, pre) {
           return;
         }
         rawText.value = result.text;
-        setStatus('خواندن ' + (persianMode ? 'تکمیلی فارسی' : 'سریع عددی') + ' انجام شد. لطفاً اطلاعات را بررسی و تأیید کنید.');
         analyzeText(result.text);
+        const parsed = Core.analyzeBankReceipt(result.text, S);
+        if (!persianMode && (!parsed.amountRial || !parsed.date || !parsed.trackingCode)) {
+          setStatus('موتور سریع لاتین نتوانست فیش فارسی را کامل بخواند. این نتیجه قابل ثبت بدون بررسی نیست. «خواندن تکمیلی متن فارسی» را بزنید یا مبلغ و تاریخ را دستی اصلاح کنید.');
+        } else {
+          setStatus('خواندن ' + (persianMode ? 'تکمیلی فارسی' : 'سریع عددی') + ' انجام شد. اطلاعات شناسایی‌شده را با تصویر تطبیق دهید.');
+        }
       } catch (err) {
         if (runId === photoRun && sh.el.isConnected)
           setStatus('خواندن عکس انجام نشد: ' + (err.message || String(err)) + '؛ می‌توانید OCR فارسی تکمیلی را انتخاب یا اطلاعات را دستی وارد کنید.');

@@ -45,6 +45,13 @@ function analyze(text,state){
       const val=money(m[1]||m[3],m[2]||(m[0].match(/ریال|تومان|تومن/)||[])[0]);
       if(val)amounts.push({val,unit:m[2]||(m[0].match(/ریال|تومان|تومن/)||[])[0],rank:/مبلغ انتقال|انتقال مبلغ|مبلغ پرداخت|انتقال وجه|انتقال پول|^مبلغ\s*:|\sمبلغ\s*:/.test(line)?10:/کارمزد|موجودی|مانده|قابل برداشت|سررسید/.test(line)?-10:/مبلغ|انتقال|پرداخت|واریز/.test(near)?5:1});
     }
+    // OCR can split the bank's label, amount and unit into adjacent lines.
+    // Only use tight proximity to an explicit amount label; never infer an unlabeled number.
+    if(/(?:^|\s)(?:مبلغ|مبلغ انتقال|انتقال مبلغ)\s*[:：]?/.test(line) && !/کارمزد|مانده|موجودی/.test(line)) {
+      const windowText=[line,lines[i+1]||'',lines[i+2]||''].join(' ');
+      const nearNumber=windowText.match(/(\d{1,3}(?:[٬،,]\d{3})+|\d{5,15})\s*(ریال|تومان|تومن)|(?:ریال|تومان|تومن)\s*(\d{1,3}(?:[٬،,]\d{3})+|\d{5,15})/);
+      if(nearNumber){const unit=nearNumber[2]||(nearNumber[0].match(/ریال|تومان|تومن/)||[])[0];const val=money(nearNumber[1]||nearNumber[3],unit);if(val)amounts.push({val,unit,rank:12});}
+    }
     // Some bank messages put number and Rial on separate lines.
     if(/مبلغ\s*[:：]?/.test(line) && !/کارمزد/.test(line)) {
       for(const m of near.matchAll(/(\d{1,3}(?:[٬،,]\d{3})+|\d{5,15})\s*(ریال|تومان|تومن)/g)){
