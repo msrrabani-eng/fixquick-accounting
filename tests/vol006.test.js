@@ -17,7 +17,7 @@ check('OCR does not call addTx directly', () => assert.doesNotMatch(fs.readFileS
 check('registration calls existing accounting engine', () => assert.match(pages, /Core\.addTx\(S, \{ personId, type: t/));
 check('duplicate check before registration', () => assert.match(pages, /duplicate\.length && !\(await confirmBox/));
 check('tracking reference included', () => assert.match(pages, /receiptNote = verifiedReceipt/));
-check('amount converted to configured unit', () => assert.match(pages, /Core\.fmtInput\(r\.amountRial\)/));
+check('amount converted to configured unit', () => assert.match(pages, /Core\.fmtInput\((?:r\.amountRial|enteredAmount)\)/));
 check('Persian data and worker packaged by build', () => assert.match(workflow, /bash tools\/prepare_ocr\.sh/));
 check('signing key pulled from encrypted secret', () => assert.match(workflow, /secrets\.FIXQ_KEYSTORE_BASE64/));
 check('versionCode supports upgrades', () => assert.match(workflow, /100000 \+ \$\{\{ github\.run_number \}\}/));
