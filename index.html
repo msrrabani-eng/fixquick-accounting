@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#111827">
+<meta name="mobile-web-app-capable" content="yes">
+<title>حسابداری فیکس کوییک</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div id="splash"><img src="logo.png" alt=""><p>در حال بارگذاری…</p></div>
+<div class="app">
+  <header class="top">
+    <button id="back" class="hb" data-act="go" hidden aria-label="بازگشت">›</button>
+    <h1 id="title">حسابداری</h1>
+    <img class="logo" src="logo.png" alt="Fix Quick">
+  </header>
+  <main id="main"></main>
+  <button id="fab" class="fab" hidden aria-label="افزودن"></button>
+  <nav class="nav">
+    <button data-nav="home" data-act="go" data-h="#/home"><i>🏠</i><span>خانه</span></button>
+    <button data-nav="people" data-act="go" data-h="#/people"><i>👥</i><span>اشخاص</span></button>
+    <button data-nav="invoices" data-act="go" data-h="#/invoices"><i>🧾</i><span>فاکتورها</span></button>
+    <button data-nav="products" data-act="go" data-h="#/products"><i>📦</i><span>انبار</span></button>
+    <button data-nav="more" data-act="go" data-h="#/more"><i>☰</i><span>بیشتر</span></button>
+  </nav>
+</div>
+<script src="core.js"></script>
+<script src="base.js"></script>
+<script src="print.js"></script>
+<script src="pages.js"></script>
+</body>
+</html>

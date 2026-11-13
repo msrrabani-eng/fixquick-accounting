@@ -1,0 +1,13 @@
+node_modules/
+android/
+tests/shots/
+*.apk
+
+# Never commit production signing credentials
+*.jks
+*.keystore
+*.p12
+*.pfx
+.env
+.env.*
+!*.example

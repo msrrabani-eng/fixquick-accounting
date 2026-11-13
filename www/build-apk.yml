@@ -1,0 +1,108 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Unit tests (accounting engine)
+        run: node tests/core.test.js
+
+      - name: Install Capacitor
+        run: npm install --no-audit --no-fund
+
+      - name: Create Android project
+        run: npx cap add android
+
+      - name: Permissions (camera for QR scanning, fingerprint)
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          python3 - <<'PY'
+          f = 'android/app/src/main/AndroidManifest.xml'
+          s = open(f).read()
+          add = ''
+          for line in ['<uses-permission android:name="android.permission.CAMERA" />',
+                       '<uses-feature android:name="android.hardware.camera" android:required="false" />',
+                       '<uses-permission android:name="android.permission.USE_BIOMETRIC" />']:
+              if line.split('"')[1] not in s: add += '    ' + line + '\n'
+          i = s.index('<application'); s = s[:i] + add + '    ' + s[i:].lstrip() if add else s
+          open(f, 'w').write(s)
+          PY
+          grep -n "uses-" $M
+
+      - name: Icons and splash
+        run: |
+          pip install --quiet pillow
+          python3 tools/android_assets.py android/app/src/main/res
+
+      - name: Version number
+        run: |
+          sed -i -E "s/versionCode [0-9]+/versionCode ${{ github.run_number }}/; s/versionName \"[^\"]*\"/versionName \"1.0.${{ github.run_number }}\"/" android/app/build.gradle
+          grep -E "versionCode|versionName" android/app/build.gradle
+
+      - name: Sync web files
+        run: npx cap sync android
+
+      - name: Use the fixed signing key (so updates install over the old version)
+        run: |
+          mkdir -p ~/.android
+          cp android-signing/debug.keystore ~/.android/debug.keystore
+          python3 - <<'PY'
+          import re, os
+          f = 'android/app/build.gradle'
+          g = open(f).read()
+          ks = os.path.abspath('android-signing/debug.keystore')
+          block = ('    signingConfigs {\n        fixq {\n            storeFile file("' + ks + '")\n'
+                   '            storePassword "android"\n            keyAlias "androiddebugkey"\n            keyPassword "android"\n        }\n    }\n')
+          g, n1 = re.subn(r'^android \{\n', lambda m: m.group(0) + block, g, count=1, flags=re.M)
+          g, n2 = re.subn(r'^(\s*)buildTypes \{\n', lambda m: m.group(0) + m.group(1) + '    debug {\n' + m.group(1) + '        signingConfig signingConfigs.fixq\n' + m.group(1) + '    }\n', g, count=1, flags=re.M)
+          assert n1 == 1 and n2 == 1, (n1, n2)
+          open(f, 'w').write(g)
+          PY
+          grep -n -A6 "signingConfigs" android/app/build.gradle
+
+      - name: Build APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Collect APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk FixQuick-Accounting.apk
+
+      - name: Check the APK is signed with the fixed key
+        run: |
+          AS=$(ls $ANDROID_HOME/build-tools/*/apksigner | sort -V | tail -1)
+          $AS verify --print-certs FixQuick-Accounting.apk | tee certs.txt
+          grep -qi "dd67504f0c9fc6bcb4e1427050a62f0fa0ab3698edf228d6a7b6dd141f85139c" certs.txt || { echo "WRONG SIGNING KEY"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FixQuick-Accounting-APK
+          path: FixQuick-Accounting.apk
+
+      - name: Publish as release "latest"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest FixQuick-Accounting.apk --title "Fix Quick Accounting 1.0.${{ github.run_number }}" --notes "APK built from commit ${GITHUB_SHA::7}"

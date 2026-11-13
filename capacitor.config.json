@@ -1,0 +1,8 @@
+{
+  "appId": "ir.fixquick.accounting",
+  "appName": "فیکس کوییک",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#f4f6f8"
+  }
+}
