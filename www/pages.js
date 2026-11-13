@@ -198,18 +198,86 @@ function txForm(type, personId, tx, pre) {
   const sh = sheet(tx ? 'ویرایش تراکنش' : titles[t], '<form id="tf"><label class="fld"><span>شخص</span><button type="button" class="inp pick" id="tf-p">' + esc(personId ? personName(personId) : 'انتخاب شخص…') + '</button></label>' +
     (t === 'manual' ? '<label class="fld"><span>نوع</span><select class="inp" name="kind"><option value="debit">او به من بدهکار شد (طلب من زیاد شود)</option><option value="credit">من به او بدهکار شدم (بدهی من زیاد شود)</option></select></label>' : '') +
     moneyField('amount', tx ? tx.amount : 0, 'مبلغ (' + UNIT() + ')') + (personId && !tx && isPay ? '<button type="button" class="lnk" id="tf-full">تسویه کامل مانده</button>' : '') +
-    (isPay ? acctSel(tx ? tx.acct : (pre && pre.acct)) : '') + dateField('date', tx ? tx.date : today()) + '<label class="fld"><span>شرح</span><input class="inp" name="desc" value="' + esc(tx ? tx.desc : '') + '"></label><button class="btn blue" type="submit">ثبت</button></form>');
+    (isPay ? acctSel(tx ? tx.acct : (pre && pre.acct)) : '') + dateField('date', tx ? tx.date : today()) + '<label class="fld"><span>شرح</span><input class="inp" name="desc" value="' + esc(tx ? tx.desc : '') + '"></label>' +
+    (isPay && !tx ? '<div class="receipt-zone"><b>فیش بانکی هوشمند</b><p class="hint">عکس بگیرید یا از گالری انتخاب کنید. اطلاعات استخراج‌شده قبل از ثبت باید تأیید شوند.</p>' +
+      '<div class="row2"><button type="button" class="btn ghost" id="tf-camera">📷 گرفتن عکس</button><button type="button" class="btn ghost" id="tf-gallery">🖼 انتخاب از گالری</button></div>' +
+      '<input id="tf-camera-file" type="file" accept="image/*" capture="environment" hidden><input id="tf-gallery-file" type="file" accept="image/*" hidden>' +
+      '<div id="tf-ocr-status" class="hint" role="status" aria-live="polite"></div>' +
+      '<details class="receipt-manual"><summary>متن فیش / اصلاح دستی اطلاعات</summary><textarea id="tf-ocr-text" class="inp" rows="5" placeholder="متن فیش بانکی را اینجا وارد یا اصلاح کنید…"></textarea><button type="button" id="tf-ocr-analyze" class="btn ghost sm">بررسی متن فیش</button></details>' +
+      '<div id="tf-ocr-review" hidden></div></div>' : '') + '<button class="btn blue" type="submit">ثبت</button></form>');
   const f = sh.q('#tf'); if (tx && f.kind) f.kind.value = tx.kind;
   const setP = id => { personId = id; sh.q('#tf-p').textContent = personName(id); };
   if (tx) sh.q('#tf-p').disabled = true; else sh.q('#tf-p').onclick = () => pickList('انتخاب شخص', personItems(), v => setP(+v));
   const full = sh.q('#tf-full'); if (full) full.onclick = () => { const b = Core.balanceOf(S, personId); if (!b) return toast('مانده صفر است.'); f.amount.value = Core.fmtInput((Math.abs(b))); mwUpdate(f.amount); };
+  // The OCR result is a draft only: no transaction is written before the normal form submit.
+  let verifiedReceipt = null;
+  const review = sh.q('#tf-ocr-review'), status = sh.q('#tf-ocr-status'), rawText = sh.q('#tf-ocr-text');
+  if (review) {
+    const setStatus = msg => { status.textContent = msg; };
+    const analyzeText = text => {
+      const r = Core.analyzeBankReceipt(text, S);
+      verifiedReceipt = null;
+      review.hidden = false;
+      review.innerHTML = '<p class="hint">متن تشخیص‌داده‌شده را بررسی کنید. با دکمه زیر فقط فرم تکمیل می‌شود؛ ثبت نهایی جداگانه است.</p>' +
+        '<div class="kv"><span>مبلغ</span><b>' + (r.amountRial ? esc(Core.toFa(String(r.amountRial))) + ' ریال' : 'نامشخص') + '</b>' +
+        '<span>تاریخ</span><b>' + esc(fa(r.date || 'نامشخص')) + '</b><span>ساعت</span><b>' + esc(fa(r.time || 'نامشخص')) + '</b>' +
+        '<span>بانک مبدأ</span><b>' + esc(r.sourceBank || 'نامشخص') + '</b><span>بانک مقصد</span><b>' + esc(r.destinationBank || 'نامشخص') + '</b></div>' +
+        '<label class="fld"><span>کد رهگیری (قابل اصلاح)</span><input class="inp ltr" id="tf-ocr-code" value="' + esc(r.trackingCode || '') + '" placeholder="کد رهگیری"></label>' +
+        '<label class="fld"><span>ساعت (قابل اصلاح)</span><input class="inp ltr" id="tf-ocr-time" value="' + esc(r.time || '') + '" placeholder="مثلاً 14:05"></label>' +
+        '<label class="fld"><span>بانک مبدأ (قابل اصلاح)</span><input class="inp" id="tf-ocr-source" value="' + esc(r.sourceBank || '') + '"></label>' +
+        '<label class="fld"><span>بانک مقصد (قابل اصلاح)</span><input class="inp" id="tf-ocr-dest" value="' + esc(r.destinationBank || '') + '"></label>' +
+        (r.warnings.length ? '<div class="receipt-warnings">' + r.warnings.map(x => '<p>⚠ ' + esc(x) + '</p>').join('') + '</div>' : '') +
+        '<button type="button" class="btn green" id="tf-ocr-apply">تأیید اطلاعات و انتقال به فرم</button>';
+      sh.q('#tf-ocr-apply').onclick = () => {
+        const trackingCode = Core.toEn(sh.q('#tf-ocr-code').value).replace(/\s/g, '').trim();
+        if (r.amountRial) { f.amount.value = Core.fmtInput(r.amountRial); mwUpdate(f.amount); }
+        if (r.date) {
+          if (/^1[34]\d{2}\//.test(r.date)) f.date.value = fa(r.date);
+          else if (/^20\d{2}\//.test(r.date)) {
+            const date = r.date.replace(/\//g, '-');
+            try { f.date.value = fa(Core.isoToJalali(date)); } catch (e) { /* user can enter date */ }
+          }
+        }
+        // Don't auto-select bank based on bank name: an owner can have multiple accounts at the same bank.
+        // Track code and bank references within the normal transaction description, which is included in backups.
+        verifiedReceipt = { trackingCode, time: sh.q('#tf-ocr-time').value.trim().slice(0, 12), sourceBank: sh.q('#tf-ocr-source').value.trim().slice(0, 100), destinationBank: sh.q('#tf-ocr-dest').value.trim().slice(0, 100) };
+        setStatus('اطلاعات به فرم منتقل شد. حساب بانکی و مبلغ را بررسی کنید و برای ثبت نهایی دکمه «ثبت» را بزنید.');
+        review.hidden = true;
+      };
+    };
+    sh.q('#tf-ocr-analyze').onclick = () => analyzeText(rawText.value);
+    const processPhoto = async input => {
+      const file = input.files && input.files[0]; input.value = ''; if (!file) return;
+      review.hidden = true; verifiedReceipt = null;
+      try {
+        setStatus('در حال خواندن عکس روی گوشی…');
+        const result = await ReceiptOCR.recognize(file, (msg, progress) => { setStatus('در حال شناسایی متن فیش… ' + fa(Math.round(progress * 100)) + '٪'); });
+        if (!sh.el.isConnected) return; // the sheet was closed during recognition
+        rawText.value = result.text;
+        setStatus('خواندن عکس انجام شد. لطفاً اطلاعات را بررسی و تأیید کنید.');
+        analyzeText(result.text);
+      } catch (err) { setStatus('خواندن عکس انجام نشد: ' + (err.message || String(err)) + ' متن فیش را می‌توانید دستی وارد کنید.'); }
+    };
+    const camera = sh.q('#tf-camera-file'), gallery = sh.q('#tf-gallery-file');
+    sh.q('#tf-camera').onclick = () => camera.click();
+    sh.q('#tf-gallery').onclick = () => gallery.click();
+    camera.onchange = () => processPhoto(camera);
+    gallery.onchange = () => processPhoto(gallery);
+    rawText.oninput = () => { verifiedReceipt = null; review.hidden = true; setStatus('متن فیش تغییر کرد؛ دوباره «بررسی متن فیش» را بزنید.'); };
+  }
   f.onsubmit = async e => {
     e.preventDefault(); const amount = Core.parseMoney(f.amount.value), date = readDate(f, 'date');
     if (!date) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true);
     if (!tx && !gate()) return;
+    if (verifiedReceipt && verifiedReceipt.trackingCode) {
+      const duplicate = Core.analyzeBankReceipt('کد رهگیری: ' + verifiedReceipt.trackingCode, S).duplicateCandidates;
+      if (duplicate.length && !(await confirmBox('این کد رهگیری قبلاً در ' + fa(duplicate.length) + ' تراکنش ثبت شده است. احتمال ثبت فیش تکراری وجود دارد. باز هم ثبت شود؟', 'با وجود تکراری بودن ثبت کن'))) return;
+    }
     if (f.acct && t === 'payment' && !(await cashGuard(+f.acct.value, amount - (tx && tx.acct === +f.acct.value ? tx.amount : 0), date))) return;
+    const receiptNote = verifiedReceipt ? [verifiedReceipt.trackingCode ? 'کد رهگیری ' + verifiedReceipt.trackingCode : '', verifiedReceipt.time ? 'ساعت ' + verifiedReceipt.time : '', verifiedReceipt.sourceBank ? 'بانک مبدأ ' + verifiedReceipt.sourceBank : '', verifiedReceipt.destinationBank ? 'بانک مقصد ' + verifiedReceipt.destinationBank : ''].filter(Boolean).join(' | ') : '';
+    const desc = [f.desc.value.trim() || titles[t], receiptNote].filter(Boolean).join(' | ');
     const r = tx ? Core.editTx(S, tx.id, { amount, date, desc: f.desc.value, kind: f.kind ? f.kind.value : tx.kind, acct: f.acct ? +f.acct.value : null })
-      : Core.addTx(S, { personId, type: t, kind: f.kind ? f.kind.value : null, amount, date, desc: f.desc.value || titles[t], acct: f.acct ? +f.acct.value : null, ref: pre && pre.ref || null });
+      : Core.addTx(S, { personId, type: t, kind: f.kind ? f.kind.value : null, amount, date, desc, acct: f.acct ? +f.acct.value : null, ref: pre && pre.ref || null });
     if (await done(r, 'ثبت شد.')) { if (!tx) bumpUsage(); sh.close(); }
   };
 }

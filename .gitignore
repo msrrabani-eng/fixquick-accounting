@@ -11,3 +11,6 @@ tests/shots/
 .env
 .env.*
 !*.example
+
+# OCR binaries are generated during GitHub Actions APK build
+www/ocr/

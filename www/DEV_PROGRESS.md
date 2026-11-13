@@ -70,3 +70,12 @@
 
 ## گام بعدی
 - ساخت مسیر خواندن تصویر (OCR روی دستگاه یا سرویس امن با انتخاب کاربر)، نمایش پیش‌نویس قابل اصلاح، و اتصال **صرفاً پس از تأیید نهایی** به فرم دریافت/پرداخت. آزمون با نمونه‌های واقعیِ بی‌اطلاعات شخصی‌شده و سپس طراحی اسکن IMEI برچسب جعبه.
+
+
+## Volume 006 (2026-11-13)
+- Integrated image-to-text OCR into both person receipt/payment sheets, with camera and gallery options.
+- Offline bundled Persian+English Tesseract OCR at Android APK build time.
+- Editable review (tracking code, time, source/destination banks; amount and date in parent form), explicit approval and explicit form submission.
+- Duplicate tracking warning before save and reference in transaction description.
+- v006 integration checks and existing regression suite.
+- NOTE: OCR accuracy and on-device Android APK installation still require validation. Image itself is not persisted.

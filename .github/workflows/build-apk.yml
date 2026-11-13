@@ -24,14 +24,23 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Unit tests (accounting engine)
-        run: node tests/core.test.js
+      - name: Unit tests (accounting engine and smart receipt integration)
+        run: |
+          node tests/core.test.js
+          node tests/vol002.test.js
+          node tests/vol003.test.js
+          node tests/vol004.test.js
+          node tests/vol005.test.js
+          node tests/vol006.test.js
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |
           # with the lock file every build uses exactly the same versions; the first build creates it (saved to the repo below)
           if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
           npm ls --depth=0 || true
+
+      - name: Bundle offline Persian and English OCR
+        run: bash tools/prepare_ocr.sh
 
       - name: Create Android project
         run: npx cap add android
@@ -74,10 +83,7 @@ jobs:
         env:
           FIXQ_KEYSTORE_BASE64: ${{ secrets.FIXQ_KEYSTORE_BASE64 }}
         run: |
-          if [ -z "$FIXQ_KEYSTORE_BASE64" ]; then
-            echo "::error::Missing FIXQ_KEYSTORE_BASE64 GitHub Actions secret"
-            exit 1
-          fi
+          if [ -z "$FIXQ_KEYSTORE_BASE64" ]; then echo '::error::Missing FIXQ_KEYSTORE_BASE64 secret'; exit 1; fi
           mkdir -p ~/.android android-signing
           printf '%s' "$FIXQ_KEYSTORE_BASE64" | base64 --decode > android-signing/debug.keystore
           cp android-signing/debug.keystore ~/.android/debug.keystore
