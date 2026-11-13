@@ -25,6 +25,7 @@ function pageHome() {
   if (S.settings.auditIssues > 0 && isAdmin()) h += '<div class="alert warn">' + ico('alert') + 'بررسی خودکار هفتگی ' + fa(S.settings.auditIssues) + ' ناهماهنگی در اطلاعات پیدا کرد. <button class="lnk" data-act="audit">جزئیات</button></div>';
   if (can('backup') && hasData && (days === null || days > 7)) h += '<div class="alert warn">' + ico('save') + (days === null ? 'هنوز پشتیبان نگرفته‌اید.' : 'آخرین پشتیبان ' + fa(days) + ' روز پیش بوده.') + ' <button class="lnk" data-act="saveLocal">ذخیره کن</button></div>';
   h += '<button class="gsbar" data-act="go" data-h="#/search">' + ico('search') + '<span>جستجو یا سؤال: «آیفون ۱۶ از کی خریدیم»…</span></button>';
+  h += '<div class="row2 fq-smart-actions"><button class="btn ghost" data-act="go" data-h="#/assistant">💬 دستیار گفت‌وگویی</button>' + (can('reports') ? '<button class="btn ghost" data-act="go" data-h="#/safety">🛡️ کنترل خطا</button>' : '') + '</div>';
   // one tap to every everyday job
   const big = [[true, 'newInv', 'sale', 'receipt', 'فروش', 'green'], [can('purchase'), 'newInv', 'purchase', 'cart', 'خرید', 'blue']].filter(x => x[0]);
   const small = [[can('money'), 'quickTx', 'receipt', 'in', 'دریافت'], [can('money'), 'quickTx', 'payment', 'out', 'پرداخت'], [can('money') && feat('cheques'), 'addCheque', '', 'cheque', 'ثبت چک'], [can('money') && feat('cheques'), 'spendChequeHome', '', 'cheque', 'خرج چک'], [can('money') && feat('transfer'), 'transfer', '', 'transfer', 'حواله'], [can('money') && feat('expenses'), 'addExpense', '', 'wallet', 'هزینه'], [true, 'newInv', 'sale_return', 'ret', 'برگشتی']].filter(x => x[0]);
@@ -224,6 +225,7 @@ function txForm(type, personId, tx, pre) {
     if (!tx && !gate()) return;
     if (f.acct && t === 'payment' && !(await cashGuard(+f.acct.value, amount - (tx && tx.acct === +f.acct.value ? tx.amount : 0), date))) return;
     const desc = f.desc.value.trim() || titles[t];
+    if (!(await smartGuardConfirm('tx', {type:t,personId,amount,date,desc,acct:f.acct?+f.acct.value:null,ref:pre&&pre.ref||null}, tx&&tx.id))) return;
     const r = tx ? Core.editTx(S, tx.id, { amount, date, desc: f.desc.value, kind: f.kind ? f.kind.value : tx.kind, acct: f.acct ? +f.acct.value : null })
       : Core.addTx(S, { personId, type: t, kind: f.kind ? f.kind.value : null, amount, date, desc, acct: f.acct ? +f.acct.value : null, ref: pre && pre.ref || null });
     if (await done(r, 'ثبت شد.')) { if (!tx) bumpUsage(); txDraft.clear(); sh.close(); }
@@ -241,7 +243,7 @@ function transferForm(fromId, group) {
   });
   sh.q('#xf-a').onclick = () => pickList('از حساب', personItems(), v => { from = +v; sh.q('#xf-a').textContent = personName(from); Drafts.touch(sh.q('#xf')); });
   sh.q('#xf-b').onclick = () => pickList('به حساب', personItems(), v => { to = +v; sh.q('#xf-b').textContent = personName(to); Drafts.touch(sh.q('#xf')); });
-  const f = sh.q('#xf'); f.onsubmit = async e => { e.preventDefault(); const date = readDate(f, 'date'), amount = Core.parseMoney(f.amount.value); if (!date) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); if (ti) { if (await done(Core.editTransfer(S, group, { fromId: from, toId: to, amount, date, desc: f.desc.value }), 'حواله اصلاح شد.')) {transferDraft.clear();sh.close();} return; } if (!gate()) return; if (await done(Core.addTransfer(S, { fromId: from, toId: to, amount, date, desc: f.desc.value }), 'حواله ثبت شد.')) { bumpUsage(); transferDraft.clear(); sh.close(); } };
+  const f = sh.q('#xf'); f.onsubmit = async e => { e.preventDefault(); const date = readDate(f, 'date'), amount = Core.parseMoney(f.amount.value); if (!date) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); if (ti) { if (await done(Core.editTransfer(S, group, { fromId: from, toId: to, amount, date, desc: f.desc.value }), 'حواله اصلاح شد.')) {transferDraft.clear();sh.close();} return; } if (!gate()) return; if (!(await smartGuardConfirm('transfer',{fromId:from,toId:to,amount,date,desc:f.desc.value}))) return; if (await done(Core.addTransfer(S, { fromId: from, toId: to, amount, date, desc: f.desc.value }), 'حواله ثبت شد.')) { bumpUsage(); transferDraft.clear(); sh.close(); } };
 }
 function txOpen(id) {
   const t = Core.byId(S.tx, id); if (!t) return;
@@ -423,6 +425,7 @@ async function submitInvoice(e) {
   }
   const d = { type, personId: +f.pid.value, date, no: Core.toEn(f.no.value).trim(), items: rd.items, discount: rd.discount, paid: rd.paid, acct: +f.acct.value, note: f.note.value, vatRate: f.vat.checked ? (+f.vr.value || 0) : 0 };
   if (f.wh) { d.wh = +f.wh.value; UI.lastWh = d.wh; }
+  if (!(await smartGuardConfirm('invoice', d, editId))) return;
   const r = editId ? Core.editInvoice(S, editId, d) : Core.addInvoice(S, d);
   if (!r.ok) return toast(r.error, true);
   S.settings.vatOn = f.vat.checked; if (!editId) bumpUsage(); if (!(await save())) return; Drafts.clear(f); toast(editId ? 'تغییرات فاکتور ذخیره شد.' : 'فاکتور ثبت شد.'); goHash('#/inv/' + r.invoice.id);
@@ -589,7 +592,7 @@ function pageExpenses() {
 function expenseForm(e, pre) {
   const sh = sheet(e ? 'ویرایش هزینه' : 'هزینه جدید', '<form id="ef"><label class="fld"><span>عنوان</span><input class="inp" name="title" value="' + esc(e ? e.title : '') + '"></label>' + moneyField('amount', e ? e.amount : 0, 'مبلغ') + '<div class="row2"><label class="fld"><span>دسته (اختیاری)</span><input class="inp" name="cat" value="' + esc(e ? e.category : '') + '" list="cats"><datalist id="cats">' + [...new Set(S.expenses.map(x => x.category).filter(Boolean))].map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></label>' + acctSel(e ? e.acct : (pre && pre.acct)) + '</div>' + dateField('date', e ? e.date : today()) + '<div class="row2"><button class="btn blue" type="submit">ذخیره</button>' + (e ? '<button class="btn red" type="button" data-del>حذف</button>' : '') + '</div></form>' + (e && routeAllowed('vouchers') ? '<button class="btn ghost" data-doc>' + ico('file') + 'سند حسابداری این هزینه</button>' : ''));
   const dc = sh.q('[data-doc]'); if (dc) dc.onclick = () => { sh.close(); actions.docOf({ k: 'exp', id: String(e.id) }); };
-  const f = sh.q('#ef'); const expenseDraft=Drafts.attachSheet(sh,'expense:'+(e ? 'edit:'+e.id : 'new')); f.onsubmit = async ev => { ev.preventDefault(); const date = readDate(f, 'date'), amount = Core.parseMoney(f.amount.value); if (!date) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); const d = { title: f.title.value, amount, date, acct: +f.acct.value, category: f.cat.value }; if (!e && !gate()) return; if (!(await cashGuard(d.acct, amount - (e && e.acct === d.acct ? e.amount : 0), date))) return; if (await done(e ? Core.editExpense(S, e.id, d) : Core.addExpense(S, d), 'ذخیره شد.')) { if (!e) bumpUsage(); expenseDraft.clear(); sh.close(); } };
+  const f = sh.q('#ef'); const expenseDraft=Drafts.attachSheet(sh,'expense:'+(e ? 'edit:'+e.id : 'new')); f.onsubmit = async ev => { ev.preventDefault(); const date = readDate(f, 'date'), amount = Core.parseMoney(f.amount.value); if (!date) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); const d = { title: f.title.value, amount, date, acct: +f.acct.value, category: f.cat.value }; if (!e && !gate()) return; if (!(await cashGuard(d.acct, amount - (e && e.acct === d.acct ? e.amount : 0), date))) return; if (!(await smartGuardConfirm('expense',d,e&&e.id))) return; if (await done(e ? Core.editExpense(S, e.id, d) : Core.addExpense(S, d), 'ذخیره شد.')) { if (!e) bumpUsage(); expenseDraft.clear(); sh.close(); } };
   const dl = sh.q('[data-del]'); if (dl) dl.onclick = async () => { if (await confirmBox('این هزینه حذف شود؟', 'حذف', true)) { sh.close(); await done(Core.deleteExpense(S, e.id), 'حذف شد.'); } };
 }
 
@@ -827,6 +830,7 @@ function setPin() {
 
 /* ─────────── actions ─────────── */
 const actions = {
+  fqChatExample: d => smartAskQuestion(d.q),
   go: d => { goHash(d.h); },
   chip: d => { UI[d.k] = d.v; if (d.k === 'prodCat') UI.limProd = 100; if (d.k === 'repTab' || d.k === 'rep') UI.limRep = 60; if (d.k === 'rep' && d.v === 'custom' && !UI.repFrom) { UI.repFrom = Core.periodRange('month').from; UI.repTo = today(); } render(); },
   addPerson: () => personForm(), editPerson: d => personForm(Core.byId(S.people, +d.p)),
@@ -945,9 +949,9 @@ function personFormInline() { // quick-add from invoice picker
 /* ─────────── router / shell ─────────── */
 const routes = {
   home: pageHome, people: pagePeople, person: pagePerson, invoices: pageInvoices, inv: pageInvoice, edit: (a) => { const i = Core.byId(S.invoices, +a); return i ? pageNewInvoice(i.type, { edit: i }) : { title: 'ویرایش', html: empty(ico('help'), 'فاکتور پیدا نشد.'), back: '#/invoices' }; }, new: (a) => pageNewInvoice(a, Object.fromEntries(new URLSearchParams((location.hash.split('?')[1]) || ''))),
-  search: pageSearch, products: pageProducts, stock: pageStock, kardex: pageKardex, cheques: pageCheques, expenses: pageExpenses, reports: pageReports, more: pageMore, settings: pageSettings, accounts: pageAccounts, acct: pageAcct, recon: pageRecon, vouchers: pageVouchers, coa: pageCoa, fiscal: pageFiscal, warehouses: pageWarehouses, wh: pageWh
+  search: pageSearch, assistant: pageSmartAssistant, safety: pageSafety, products: pageProducts, stock: pageStock, kardex: pageKardex, cheques: pageCheques, expenses: pageExpenses, reports: pageReports, more: pageMore, settings: pageSettings, accounts: pageAccounts, acct: pageAcct, recon: pageRecon, vouchers: pageVouchers, coa: pageCoa, fiscal: pageFiscal, warehouses: pageWarehouses, wh: pageWh
 };
-const navMap = { vouchers: 'more', coa: 'more', fiscal: 'more', warehouses: 'products', wh: 'products', search: 'home', home: 'home', people: 'people', person: 'people', invoices: 'invoices', inv: 'invoices', edit: 'invoices', new: 'invoices', products: 'products', stock: 'products', kardex: 'products', more: 'more', cheques: 'more', expenses: 'more', reports: 'more', settings: 'more', accounts: 'more', acct: 'more', recon: 'more' };
+const navMap = { assistant: 'home', safety: 'home', vouchers: 'more', coa: 'more', fiscal: 'more', warehouses: 'products', wh: 'products', search: 'home', home: 'home', people: 'people', person: 'people', invoices: 'invoices', inv: 'invoices', edit: 'invoices', new: 'invoices', products: 'products', stock: 'products', kardex: 'products', more: 'more', cheques: 'more', expenses: 'more', reports: 'more', settings: 'more', accounts: 'more', acct: 'more', recon: 'more' };
 let lastRoute = '';
 // update the page around a text box the user is typing in, without ever touching that box
 // (re-creating it drops letters on Android keyboards that are still composing a word)
@@ -979,6 +983,7 @@ function render(opt) {
 }
 // what a sub-user may open / press
 function routeAllowed(page) {
+  if (page === 'safety' && !can('reports')) return false;
   page = page || ((location.hash || '#/home').split('?')[0].split('/')[1] || 'home');
   if (FEAT_ROUTE[page] && !feat(FEAT_ROUTE[page])) return false;
   if (isAdmin()) return true;
@@ -992,8 +997,7 @@ function routeAllowed(page) {
   if (page === 'kardex') return can('cost');
   if (page === 'edit') return can('edit');
   if (page === 'new' && (arg === 'purchase' || arg === 'purchase_return')) return can('purchase');
-  return true;
-}
+  return true;}
 const ACT_PERM = { openImport: d => (d.k === 'stock' ? 'warehouse' : 'people'), stmtRange: 'balances', vchNew: 'money', coaAdd: 'admin', coaRen: 'admin', coaDel: 'admin', tafNew: 'admin', tafEdit: 'admin', fyClose: 'admin', fyReopen: 'admin', whNew: 'warehouse', whEdit: 'warehouse', whTxNew: 'warehouse', reconGo: 'money', acctNew: 'money', acctEdit: 'money', acctXfer: 'money', acctTx: 'money', acctExp: 'money', reconAdd: 'money', reconSave: 'money', addPerson: 'people', editPerson: 'people', archive: 'people', delPerson: 'people', bulkPeople: 'people', txForm: 'money', quickTx: 'money', transfer: 'money', payInv: 'money', addCheque: 'money', personChequeReceive: 'money', personChequePay: 'money', spendChequeHome: 'money', chqDone: 'money', chqReopen: 'edit', chqEdit: 'edit', chqDel: 'edit', addExpense: 'money', delInv: 'edit', addProduct: 'warehouse', bulkProducts: 'warehouse', whTools: 'warehouse', prodImport: 'warehouse', csvPeople: 'balances', csvStmt: 'balances', shareStmt: 'balances', csvLedger: 'reports', csvInvoices: 'reports', backup: 'backup', saveLocal: 'backup', restore: 'backup', autoRestore: 'backup', plGo: 'reports', resetData: 'admin', wipe: 'admin', activate: 'admin', userEdit: 'admin', lockClear: 'admin', audit: 'admin' };
 function actAllowed(el) {
   if (isAdmin()) return true; const a = el.dataset.act, np = ACT_PERM[a], need = typeof np === 'function' ? np(el.dataset) : np;
