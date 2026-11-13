@@ -71,8 +71,15 @@ jobs:
         run: npx cap sync android
 
       - name: Use the fixed signing key (so updates install over the old version)
+        env:
+          FIXQ_KEYSTORE_BASE64: ${{ secrets.FIXQ_KEYSTORE_BASE64 }}
         run: |
-          mkdir -p ~/.android
+          if [ -z "$FIXQ_KEYSTORE_BASE64" ]; then
+            echo "::error::Missing FIXQ_KEYSTORE_BASE64 GitHub Actions secret"
+            exit 1
+          fi
+          mkdir -p ~/.android android-signing
+          printf '%s' "$FIXQ_KEYSTORE_BASE64" | base64 --decode > android-signing/debug.keystore
           cp android-signing/debug.keystore ~/.android/debug.keystore
           python3 - <<'PY'
           import re, os
