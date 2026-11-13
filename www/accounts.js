@@ -66,19 +66,20 @@ function accountForm(a, kind) {
     '<p class="hint">موجودی اول دوره = پولی که روز شروع کار با برنامه در این ' + (bank ? 'حساب' : 'صندوق') + ' بوده است؛ در موجودی، گزارش‌ها، تراز و مغایرت‌گیری حساب می‌شود.</p>' +
     (a ? '<label class="chk"><input type="checkbox" name="arch"' + (a.archived ? ' checked' : '') + '> بایگانی (در فرم‌ها نشان داده نشود)</label>' : '') +
     '<button class="btn blue" type="submit">ذخیره</button>' + (a ? '<button type="button" class="btn ghost red" data-del>' + ico('trash') + 'حذف</button>' : '') + '</form>');
-  const f = sh.q('#acf');
+  const f = sh.q('#acf'); const accountDraft=Drafts.attachSheet(sh,'account:'+kind+':'+(a ? 'edit:'+a.id : 'new'));
   f.onsubmit = async e => { e.preventDefault(); const op = f.opening.value.trim() === '' ? 0 : Core.parseMoney(f.opening.value); if (isNaN(op)) return toast('مبلغ نامعتبر است.', true);
     const d = { kind, name: f.name.value, opening: op * (f.neg && f.neg.checked ? -1 : 1) }; if (bank) Object.assign(d, { bank: f.bank.value, accNo: f.accNo.value, card: f.card.value, sheba: f.sheba.value, branch: f.branch.value, owner: f.owner.value }); if (a) d.archived = f.arch.checked;
-    const r = a ? Core.editAccount(S, a.id, d) : Core.addAccount(S, d); if (await done(r, 'ذخیره شد.')) sh.close(); };
+    const r = a ? Core.editAccount(S, a.id, d) : Core.addAccount(S, d); if (await done(r, 'ذخیره شد.')) { accountDraft.clear(); sh.close(); } };
   const del = sh.q('[data-del]'); if (del) del.onclick = async () => { if (!(await confirmBox('این حساب حذف شود؟', 'حذف', true))) return; const r = Core.deleteAccount(S, a.id); if (await done(r, 'حذف شد.')) { sh.close(); goHash('#/accounts'); } };
   autoFocus(() => f.bank || f.name);
 }
 function acctTransferForm(fromId, x) {
   const sh = sheet(x ? 'انتقال وجه' : 'انتقال بین صندوق و بانک', '<form id="atf">' + acctSel(x ? x.from : fromId, 'from', 'از (مبدأ)') + acctSel(x ? x.to : (acctList().find(a => a.id !== +fromId) || {}).id, 'to', 'به (مقصد)') + moneyField('amount', x ? x.amount : 0, 'مبلغ (' + UNIT() + ')') + moneyField('fee', x ? x.fee : 0, 'کارمزد بانکی (اختیاری)') + dateField('date', x ? x.date : today()) + '<label class="fld"><span>شرح</span><input class="inp" name="desc" value="' + esc(x ? x.desc : '') + '" placeholder="مثلاً واریز نقدی به بانک"></label><p class="hint">برای واریز پول نقد صندوق به بانک، برداشت از بانک به صندوق یا انتقال بین دو بانک. درآمد یا هزینه حساب نمی‌شود؛ فقط کارمزد، هزینه است.</p><button class="btn blue" type="submit">ثبت</button>' + (x ? '<button type="button" class="btn ghost red" data-del>' + ico('trash') + 'حذف</button>' : '') + '</form>');
   const f = sh.q('#atf');
+  const bankTransferDraft=Drafts.attachSheet(sh,'bank-transfer:'+(x ? 'edit:'+x.id : 'new'));
   f.onsubmit = async e => { e.preventDefault(); const date = readDate(f, 'date'), amount = Core.parseMoney(f.amount.value), fee = f.fee.value.trim() ? Core.parseMoney(f.fee.value) : 0; if (!date) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را وارد کنید.', true); if (isNaN(fee)) return toast('کارمزد نامعتبر است.', true);
     if (!(await cashGuard(+f.from.value, amount + fee - (x && x.from === +f.from.value ? x.amount + (x.fee || 0) : 0), date))) return;
-    if (x) Core.deleteAcctTx(S, x.id); const r = Core.addAcctTx(S, { from: +f.from.value, to: +f.to.value, amount, fee, date, desc: f.desc.value }); if (!r.ok && x) S.acctTx.push(x); if (await done(r, 'انتقال ثبت شد.')) sh.close(); };
+    if (x) Core.deleteAcctTx(S, x.id); const r = Core.addAcctTx(S, { from: +f.from.value, to: +f.to.value, amount, fee, date, desc: f.desc.value }); if (!r.ok && x) S.acctTx.push(x); if (await done(r, 'انتقال ثبت شد.')) {bankTransferDraft.clear(); sh.close();} };
   const del = sh.q('[data-del]'); if (del) del.onclick = async () => { if (!(await confirmBox('این انتقال حذف شود؟', 'حذف', true))) return; Core.deleteAcctTx(S, x.id); await done({ ok: true }, 'حذف شد.'); sh.close(); };
 }
 

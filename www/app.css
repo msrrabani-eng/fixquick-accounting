@@ -331,13 +331,11 @@ details.card>summary{cursor:pointer;list-style:none}details.card>summary::-webki
 /* date range bar */
 .rlnk{display:flex;align-items:center;gap:6px;margin:-2px 2px 8px;font-size:calc(13px * var(--fs,1))}.rlnk svg{width:16px;height:16px}.rbar .pick{gap:8px;color:var(--blue);font-weight:700}.rbar .pick svg{width:18px;height:18px;flex:none}
 /* v006: receipt OCR on the existing person receipt/payment sheets */
-.receipt-zone { margin: 14px 0; padding: 13px; border: 1px solid var(--border, #d7dce3); border-radius: 15px; background: var(--card, #fff); }
-.receipt-zone > b { display: block; margin-bottom: 4px; }
-.receipt-zone .row2 { margin: 10px 0; }
-.receipt-zone .row2 .btn { min-width: 0; font-size: .88rem; white-space: normal; }
-.receipt-zone .receipt-manual { margin-top: 10px; }
-.receipt-zone .receipt-manual summary { cursor: pointer; color: var(--text, #334155); padding: 8px 0; }
-.receipt-zone textarea { display: block; width: 100%; min-height: 90px; resize: vertical; }
-.receipt-zone #tf-ocr-review { margin-top: 12px; }
 .receipt-warnings { padding: 6px 10px; border-radius: 10px; background: #fff8e5; color: #6e5013; font-size: .85rem; }
 .receipt-warnings p { margin: 6px 0; }
+
+/* v012 draft restore and invoice safe navigation */
+.draft-restored{margin:4px 0 14px;padding:10px 12px;border:1px solid var(--line);background:var(--soft);border-radius:12px;font-size:calc(13px * var(--fs,1));font-weight:700}
+.draft-tools{margin:8px 0 14px}.draft-tools .btn{height:auto;min-height:44px;padding:9px 6px;font-size:calc(12px * var(--fs,1))}
+.draft-return{margin:0 0 12px;font-size:calc(13px * var(--fs,1));height:auto;min-height:46px;padding:8px 12px}
+.draft-item .lnk{text-align:right;flex:1}.draft-item .mini{flex:none}.draft-item .lnk small{font-weight:400;color:var(--mut)}

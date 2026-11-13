@@ -49,16 +49,27 @@ function voucherForm(v, copy) {
   box.addEventListener('click', e => {
     const r = e.target.closest('.vrow'); if (!r) return;
     if (e.target.closest('.vdel')) { if ($$('.vrow', box).length > 2) { r.remove(); calc(); } else toast('سند حداقل دو ردیف دارد.', true); return; }
-    if (e.target.closest('.vacc')) pickVoucherAcc(k => { r.dataset.acc = k; $('.vacc', r).textContent = Core.accName(S, k); });
+    if (e.target.closest('.vacc')) pickVoucherAcc(k => { r.dataset.acc = k; $('.vacc', r).textContent = Core.accName(S, k); Drafts.touch(sh.q('#vf')); });
   });
   box.addEventListener('input', e => { const i = e.target; if (i.name === 'dr' && i.value.trim()) $('[name=cr]', i.closest('.vrow')).value = ''; if (i.name === 'cr' && i.value.trim()) $('[name=dr]', i.closest('.vrow')).value = ''; calc(); });
   calc();
+  const voucherDraft=Drafts.attachSheet(sh,'voucher:'+(v ? 'edit:'+v.id : 'new'),{
+    getExtra:()=>({rows:$$('.vrow',box).map(r=>({acc:r.dataset.acc || '',dr:$('[name=dr]',r).value,cr:$('[name=cr]',r).value,note:$('[name=note]',r).value}))}),
+    beforeRestore:ex=>{
+      if(!Array.isArray(ex.rows))return;
+      box.innerHTML='';
+      ex.rows.slice(0,100).forEach(l=>{const r=voucherRow(box,{acc:l.acc,dr:0,cr:0,note:l.note});
+        $('[name=dr]',r).value=String(l.dr??''); $('[name=cr]',r).value=String(l.cr??'');
+      });
+      while($$('.vrow',box).length<2)voucherRow(box,{});
+    },afterRestore:()=>calc()
+  });
   sh.q('#vf').onsubmit = async e => {
     e.preventDefault(); const f = e.target, date = readDate(f, 'date'); if (!date) return toast('تاریخ نامعتبر است.', true);
     const d = { date, no: Core.toEn(f.no.value).trim(), desc: f.desc.value, lines: readVoucherRows(box) };
     if (!v && !gate()) return;
     const r = v ? Core.editVoucher(S, v.id, d) : Core.addVoucher(S, d); if (!r.ok) return toast(r.error, true);
-    if (!v) bumpUsage(); await save(); sh.close(); toast(v ? 'سند اصلاح شد.' : 'سند ' + fa(r.voucher.no) + ' ثبت شد.'); render();
+    if (!v) bumpUsage(); if (!(await save())) return; voucherDraft.clear(); sh.close(); toast(v ? 'سند اصلاح شد.' : 'سند ' + fa(r.voucher.no) + ' ثبت شد.'); render();
   };
 }
 function voucherView(id) {
@@ -256,23 +267,32 @@ function chequeForm(c, o) {
   };
   const setDir = d => { dir = d; sh.qa('[data-dir]').forEach(b => b.classList.toggle('on', b.dataset.dir === d)); sh.q('#cf-recv').hidden = d !== 'receive'; sh.q('#cf-pay').hidden = d !== 'pay' || !first; sh.q('#cf-pl').textContent = d === 'receive' ? 'از چه کسی (پرداخت‌کننده چک)' : 'به چه کسی (گیرنده چک)'; sh.q('#cf-h').textContent = d === 'receive' ? 'با ثبت، حساب شخص بستانکار و چک در «اسناد دریافتنی» (در صندوق) قرار می‌گیرد.' : 'با ثبت، حساب شخص بدهکار و چک در «اسناد پرداختنی» قرار می‌گیرد؛ با پاس شدن از بانک برداشت می‌شود.'; };
   setDir(dir); drawInvoices();
-  sh.qa('[data-dir]').forEach(b => { b.onclick = () => { setDir(b.dataset.dir); drawInvoices(); }; });
+  const chequeDraft=Drafts.attachSheet(sh,'cheque:'+(c ? 'edit:'+c.id : 'new'),{
+    getExtra:()=>({pid,dir,invoiceId}),
+    setExtra:x=>{
+      if(x.pid && Core.byId(S.people,+x.pid)) { pid=+x.pid;sh.q('#cf-p').textContent=personName(pid); }
+      if(x.dir==='pay'||x.dir==='receive') {dir=x.dir;setDir(dir);}
+      invoiceId=+x.invoiceId||null;drawInvoices();
+    },afterRestore:()=>{setDir(dir);drawInvoices();}
+  });
+  sh.qa('[data-dir]').forEach(b => { b.onclick = () => { setDir(b.dataset.dir); drawInvoices(); Drafts.touch(sh.q('#cf')); }; });
   if (sh.q('#cf-invoice')) sh.q('#cf-invoice').onchange = e => { invoiceId = +e.target.value || null; };
   if (sh.q('[data-inst]')) sh.q('[data-inst]').onclick = () => { sh.close(); legacyChequeForm(null, { inst: true }); };
-  sh.q('#cf-p').onclick = () => pickList('انتخاب شخص', personItems(), v => { pid = +v; sh.q('#cf-p').textContent = personName(pid); drawInvoices(); });
+  sh.q('#cf-p').onclick = () => pickList('انتخاب شخص', personItems(), v => { pid = +v; sh.q('#cf-p').textContent = personName(pid); drawInvoices(); Drafts.touch(sh.q('#cf')); });
   sh.q('#cf').onsubmit = async e => {
     e.preventDefault(); const f = e.target, due = readDate(f, 'due'), date = readDate(f, 'date'), amount = Core.parseMoney(f.amount.value);
     if (!pid) return toast('شخص را انتخاب کنید.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); if (!due) return toast('تاریخ سررسید نامعتبر است.', true); if (!date) return toast('تاریخ ثبت نامعتبر است.', true);
     const d = { cycle: true, kind: 'cheque', direction: dir, personId: pid, invoiceId, amount, dueDate: due, date, serial: Core.toEn(f.serial.value), bank: f.bank.value, branch: f.branch.value, drawer: f.drawer.value, acct: f.acct ? +f.acct.value : null, note: f.note.value, title: '' };
-    if (await done(c ? Core.editCheque(S, c.id, d) : Core.addCheque(S, d), c ? 'چک اصلاح شد.' : 'چک ثبت شد.')) sh.close();
+    if (await done(c ? Core.editCheque(S, c.id, d) : Core.addCheque(S, d), c ? 'چک اصلاح شد.' : 'چک ثبت شد.')) {chequeDraft.clear(); sh.close();}
   };
 }
 function legacyChequeForm(c, o) {
   o = o || {}; let pid = c ? c.personId : null;
   const sh = sheet(c ? 'ویرایش' : 'ثبت قسط / یادآور', '<form id="cf"><div class="row2"><label class="fld"><span>نوع</span><select class="inp" name="kind"><option value="installment">قسط</option><option value="cheque">چک (یادآور)</option></select></label><label class="fld"><span>جهت</span><select class="inp" name="dir"><option value="receive">دریافتی (از شخص)</option><option value="pay">پرداختی (به شخص)</option></select></label></div><label class="fld"><span>شخص (اختیاری)</span><button type="button" class="inp pick" id="cf-p">' + esc(pid ? personName(pid) : 'انتخاب…') + '</button></label><label class="fld"><span>عنوان</span><input class="inp" name="title" value="' + esc(c ? c.title : '') + '"></label>' + moneyField('amount', c ? c.amount : 0, 'مبلغ') + dateField('due', c ? c.dueDate : today(), 'سررسید') + '<label class="fld"><span>یادداشت</span><input class="inp" name="note" value="' + esc(c ? c.note || '' : '') + '"></label><p class="hint">یادآور در حساب شخص اثری ندارد؛ وقتی انجام شد، می‌توانید دریافت یا پرداخت را ثبت کنید.</p><button class="btn blue">' + (c ? 'ذخیره' : 'ثبت') + '</button></form>');
   if (c) { sh.q('[name=kind]').value = c.kind; sh.q('[name=dir]').value = c.direction; }
-  sh.q('#cf-p').onclick = () => pickList('انتخاب شخص', personItems(), v => { pid = +v; sh.q('#cf-p').textContent = personName(pid); });
-  const f = sh.q('#cf'); f.onsubmit = async e => { e.preventDefault(); const due = readDate(f, 'due'), amount = Core.parseMoney(f.amount.value); if (!due) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); const dd = { kind: f.kind.value, direction: f.dir.value, personId: pid, title: f.title.value, amount, dueDate: due, note: f.note.value }; if (await done(c ? Core.editCheque(S, c.id, dd) : Core.addCheque(S, dd), c ? 'اصلاح شد.' : 'ثبت شد.')) sh.close(); };
+  const legacyDraft=Drafts.attachSheet(sh,'cheque:legacy:'+(c ? 'edit:'+c.id : 'new'),{getExtra:()=>({pid}),setExtra:x=>{if(x.pid && Core.byId(S.people,+x.pid)){pid=+x.pid;sh.q('#cf-p').textContent=personName(pid);}}});
+  sh.q('#cf-p').onclick = () => pickList('انتخاب شخص', personItems(), v => { pid = +v; sh.q('#cf-p').textContent = personName(pid); Drafts.touch(sh.q('#cf')); });
+  const f = sh.q('#cf'); f.onsubmit = async e => { e.preventDefault(); const due = readDate(f, 'due'), amount = Core.parseMoney(f.amount.value); if (!due) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); const dd = { kind: f.kind.value, direction: f.dir.value, personId: pid, title: f.title.value, amount, dueDate: due, note: f.note.value }; if (await done(c ? Core.editCheque(S, c.id, dd) : Core.addCheque(S, dd), c ? 'اصلاح شد.' : 'ثبت شد.')) {legacyDraft.clear(); sh.close();} };
 }
 function chequeView(id) {
   const c = Core.byId(S.cheques, id); if (!c) return toast('چک پیدا نشد.', true); if (!c.cyc) { UI.chqDir = 'other'; return goHash('#/cheques'); }
@@ -412,7 +432,8 @@ function pageWh(id) {
 }
 function warehouseForm(w) {
   const sh = sheet(w ? 'ویرایش انبار' : 'انبار جدید', '<form id="whf"><label class="fld"><span>نام انبار</span><input class="inp" name="name" value="' + esc(w ? w.name : '') + '" placeholder="مثلاً: انبار پشتی، شعبه دوم"></label><label class="fld"><span>انباردار (اختیاری)</span><input class="inp" name="keeper" value="' + esc(w ? w.keeper || '' : '') + '"></label><label class="fld"><span>توضیحات</span><input class="inp" name="note" value="' + esc(w ? w.note || '' : '') + '"></label>' + (w && !w.main ? '<label class="chk"><input type="checkbox" name="arch"' + (w.archived ? ' checked' : '') + '> بایگانی (فقط وقتی موجودی ندارد)</label>' : '') + (!w && (!S.warehouses || !S.warehouses.length) ? '<p class="hint">با ساختن اولین انبار جدید، «انبار اصلی» هم ساخته می‌شود و همه کالاها و فاکتورهای قبلی در آن می‌مانند؛ هیچ عددی تغییر نمی‌کند.</p>' : '') + '<button class="btn blue">ذخیره</button>' + (w && !w.main ? '<button type="button" class="btn ghost red" data-del>حذف انبار</button>' : '') + '</form>');
-  sh.q('#whf').onsubmit = async e => { e.preventDefault(); const f = e.target, d = { name: f.name.value, keeper: f.keeper.value, note: f.note.value, archived: f.arch ? f.arch.checked : undefined }; if (await done(w ? Core.editWarehouse(S, w.id, d) : Core.addWarehouse(S, d), 'ذخیره شد.')) sh.close(); };
+  const warehouseDraft=Drafts.attachSheet(sh,'warehouse:'+(w ? 'edit:'+w.id : 'new'));
+  sh.q('#whf').onsubmit = async e => { e.preventDefault(); const f = e.target, d = { name: f.name.value, keeper: f.keeper.value, note: f.note.value, archived: f.arch ? f.arch.checked : undefined }; if (await done(w ? Core.editWarehouse(S, w.id, d) : Core.addWarehouse(S, d), 'ذخیره شد.')) {warehouseDraft.clear(); sh.close();} };
   if (sh.q('[data-del]')) sh.q('[data-del]').onclick = async () => { if (await confirmBox('انبار «' + w.name + '» حذف شود؟', 'حذف', true) && await done(Core.deleteWarehouse(S, w.id), 'حذف شد.')) { sh.close(); goHash('#/warehouses'); } };
 }
 function whTxRow(box, l, getFrom) {
@@ -426,14 +447,25 @@ function whTxForm(x, o) {
   const sh = sheet(x ? 'ویرایش حواله انتقال ' + fa(x.no) : 'حواله انتقال بین انبارها', '<form id="wtf">' + dateField('date', x ? x.date : today(), 'تاریخ') + '<div class="row2">' + whSel(from0, 'from', 'از انبار') + whSel(to0, 'to', 'به انبار') + '</div><div class="ch">کالاها</div><div id="wtrows"></div><button type="button" class="btn ghost" id="wt-add">+ افزودن کالا</button><label class="fld"><span>شرح</span><input class="inp" name="desc" value="' + esc(x ? x.desc || '' : '') + '"></label><p class="hint">انتقال فقط جای کالا را عوض می‌کند؛ موجودی کل، میانگین قیمت و سود تغییری نمی‌کند.</p><button class="btn blue">' + ico('transfer') + (x ? 'ذخیره' : 'ثبت انتقال') + '</button>' + (x ? '<button type="button" class="btn ghost red" data-del>حذف حواله</button>' : '') + '</form>', { tall: true });
   const box = sh.q('#wtrows'), from = () => +sh.q('[name=from]').value;
   (x ? x.items : [null]).forEach(l => whTxRow(box, l));
+  const whTransferDraft=Drafts.attachSheet(sh,'warehouse-transfer:'+(x ? 'edit:'+x.id : 'new'),{
+    getExtra:()=>({rows:$$('.vrow',box).map(r=>({productId:r.dataset.pid||'',qty:$('[name=qty]',r).value,note:$('[name=sn]',r).value}))}),
+    beforeRestore:ex=>{
+      if(!Array.isArray(ex.rows))return;
+      box.innerHTML='';
+      ex.rows.slice(0,150).forEach(l=>{const row=whTxRow(box,{productId:+l.productId||0,qty:1,note:String(l.note||'')});
+        $('[name=qty]',row).value=String(l.qty??'1');
+      });
+      if(!$$('.vrow',box).length)whTxRow(box,null);
+    }
+  });
   sh.q('#wt-add').onclick = () => { const r = whTxRow(box, null); $('.wtp', r).click(); };
   box.addEventListener('click', e => {
     const r = e.target.closest('.vrow'); if (!r) return;
     if (e.target.closest('.vdel')) { if ($$('.vrow', box).length > 1) r.remove(); return; }
-    if (e.target.closest('.wtp')) { const m = Core.whStock(S)[from()] || {}; pickList('کالا از «' + whName(from()) + '»', S.products.filter(p => (m[p.id] || 0) > 1e-9).map(p => ({ value: p.id, label: p.name, sub: p.sku || '', cat: Core.catOf(p), right: Core.fmtQty(m[p.id]) })).sort((a, b) => faCmp(a.label, b.label)), v => { const p = Core.byId(S.products, +v); r.dataset.pid = p.id; $('.wtp', r).textContent = p.name; const sr = Core.serialRequired(S, p); $('.wsn', r).hidden = !sr; $('[name=sn]', r).hidden = !sr; }, { cats: true }); }
+    if (e.target.closest('.wtp')) { const m = Core.whStock(S)[from()] || {}; pickList('کالا از «' + whName(from()) + '»', S.products.filter(p => (m[p.id] || 0) > 1e-9).map(p => ({ value: p.id, label: p.name, sub: p.sku || '', cat: Core.catOf(p), right: Core.fmtQty(m[p.id]) })).sort((a, b) => faCmp(a.label, b.label)), v => { const p = Core.byId(S.products, +v); r.dataset.pid = p.id; $('.wtp', r).textContent = p.name; Drafts.touch(sh.q('#wtf')); const sr = Core.serialRequired(S, p); $('.wsn', r).hidden = !sr; $('[name=sn]', r).hidden = !sr; }, { cats: true }); }
     if (e.target.closest('.wsn')) { const pid = +r.dataset.pid; if (!pid) return toast('اول کالا را انتخاب کنید.', true); const used = new Set(); $$('.vrow', box).forEach(o2 => { if (o2 !== r) Core.extractSerials($('[name=sn]', o2).value).forEach(s2 => used.add(s2)); }); const cur = new Set(Core.extractSerials($('[name=sn]', r).value)); const list = Core.serialsInStock(S, pid, null, from()).filter(s2 => !used.has(s2.serial)); if (!list.length) return toast('سریالی از این کالا در انبار مبدأ نیست.', true);
       const s2 = sheet('انتخاب سریال‌ها', '<div class="list">' + list.map(s3 => '<label class="chk rs"><input type="checkbox" value="' + esc(s3.serial) + '"' + (cur.has(s3.serial) ? ' checked' : '') + '><span><b class="ltr">' + esc(s3.serial) + '</b><small>خرید ' + fmtDate(s3.date) + '</small></span></label>').join('') + '</div><button class="btn blue" data-ok>تأیید</button>');
-      s2.q('[data-ok]').onclick = () => { const sel = s2.qa('input:checked').map(i => i.value); $('[name=sn]', r).value = sel.join(' '); if (sel.length) $('[name=qty]', r).value = fa(sel.length); s2.close(); }; }
+      s2.q('[data-ok]').onclick = () => { const sel = s2.qa('input:checked').map(i => i.value); $('[name=sn]', r).value = sel.join(' '); if (sel.length) $('[name=qty]', r).value = fa(sel.length); Drafts.touch(sh.q('#wtf')); s2.close(); }; }
   });
   sh.q('#wtf').onsubmit = async e => {
     e.preventDefault(); const f = e.target, date = readDate(f, 'date'); if (!date) return toast('تاریخ نامعتبر است.', true);
@@ -441,7 +473,7 @@ function whTxForm(x, o) {
     const d = { date, from: +f.from.value, to: +f.to.value, items, desc: f.desc.value };
     if (!x && !gate()) return;
     const r = x ? Core.editWhTx(S, x.id, d) : Core.addWhTx(S, d); if (!r.ok) return toast(r.error, true);
-    if (!x) bumpUsage(); await save(); sh.close(); toast(x ? 'حواله اصلاح شد.' : 'انتقال ثبت شد (حواله ' + fa(r.whTx.no) + ').'); render();
+    if (!x) bumpUsage(); if (!(await save())) return; whTransferDraft.clear(); sh.close(); toast(x ? 'حواله اصلاح شد.' : 'انتقال ثبت شد (حواله ' + fa(r.whTx.no) + ').'); render();
   };
   if (sh.q('[data-del]')) sh.q('[data-del]').onclick = async () => { if (await confirmBox('حواله انتقال ' + fa(x.no) + ' حذف شود؟', 'حذف', true) && await done(Core.deleteWhTx(S, x.id), 'حذف شد.')) sh.close(); };
 }

@@ -12,5 +12,5 @@ tests/shots/
 .env.*
 !*.example
 
-# OCR binaries are generated during GitHub Actions APK build
+# Retired OCR binaries must never be committed or bundled
 www/ocr/

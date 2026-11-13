@@ -30,6 +30,16 @@ function pageHome() {
   const small = [[can('money'), 'quickTx', 'receipt', 'in', 'دریافت'], [can('money'), 'quickTx', 'payment', 'out', 'پرداخت'], [can('money') && feat('cheques'), 'addCheque', '', 'cheque', 'ثبت چک'], [can('money') && feat('cheques'), 'spendChequeHome', '', 'cheque', 'خرج چک'], [can('money') && feat('transfer'), 'transfer', '', 'transfer', 'حواله'], [can('money') && feat('expenses'), 'addExpense', '', 'wallet', 'هزینه'], [true, 'newInv', 'sale_return', 'ret', 'برگشتی']].filter(x => x[0]);
   const btn = (x, cls) => '<button class="hq2 ' + (cls || '') + '" data-act="' + x[1] + '"' + (x[2] ? ' data-t="' + x[2] + '"' : '') + '>' + ico(x[3]) + '<span>' + x[4] + '</span></button>';
   h += '<div class="hact">' + (big.length ? '<div class="hbig">' + big.map(x => btn(x, x[5])).join('') + '</div>' : '') + (small.length ? '<div class="hsmall">' + small.map(x => btn(x)).join('') + '</div>' : '') + '</div>';
+  const draftNames = { 'invoice:sale':'فاکتور فروش', 'invoice:purchase':'فاکتور خرید', 'invoice:sale_return':'برگشت از فروش', 'invoice:purchase_return':'برگشت از خرید', 'transfer:new':'حواله بین اشخاص', 'bank-transfer:new':'انتقال بین بانک و صندوق', 'cheque:new':'ثبت چک', 'cheque:legacy:new':'چک / قسط یادآور', 'expense:new':'ثبت هزینه', 'tx:receipt:new':'دریافت', 'tx:payment:new':'پرداخت', 'tx:manual:new':'تراکنش حساب', 'person:new':'ثبت شخص جدید', 'product:new':'ثبت کالای جدید', 'product:invoice:new':'کالای جدید داخل فاکتور', 'account:bank:new':'حساب بانکی جدید', 'account:cash:new':'صندوق جدید', 'voucher:new':'سند حسابداری جدید', 'warehouse-transfer:new':'حواله انتقال انبار', 'warehouse:new':'انبار جدید' };
+  const drafts = Drafts.list().filter(x => (draftNames[x.kind] || x.kind.startsWith('invoice:edit:')) &&
+    (!x.kind.startsWith('invoice:purchase') || can('purchase')) &&
+    (!/(cheque|transfer|tx:|expense|account:)/.test(x.kind) || can('money')) &&
+    (!x.kind.startsWith('product:') || can('warehouse')) && (!x.kind.startsWith('person:') || can('people')) &&
+    (!x.kind.startsWith('invoice:edit:') || can('edit')) &&
+    (!x.kind.startsWith('voucher:') || routeAllowed('vouchers')) &&
+    (!x.kind.startsWith('warehouse') || can('warehouse')));
+  if(drafts.length) h += '<div class="card"><div class="ch">📝 عملیات نیمه‌تمام (' + fa(drafts.length) + ')</div><p class="hint">این موارد هنوز در حسابداری ثبت نشده‌اند و می‌توانید از همان‌جا ادامه دهید.</p>' + drafts.slice(0,8).map(d =>
+    '<div class="row draft-item"><button type="button" class="lnk" data-act="resumeDraft" data-k="' + esc(d.kind) + '"><b>' + esc(draftNames[d.kind] || 'ویرایش فاکتور') + '</b><small>ادامه از آخرین مرحله</small></button><button type="button" class="mini" data-act="discardDraft" data-k="' + esc(d.kind) + '">حذف</button></div>').join('') + '</div>';
   // short summary; numbers can be hidden with the eye
   const n = v => (hide ? '<span class="mask">••••••</span>' : fmt(v));
   const tr = Core.report(S, t, t), sales = S.invoices.filter(i => i.date === t && i.type === 'sale').length, rows = [];
@@ -163,11 +173,12 @@ function personForm(p) {
     (p ? '' : '<div class="fld"><span>مانده اول دوره (اختیاری) ' + help('opening') + '</span><div class="row2"><select class="inp" name="obk"><option value="1">او به من بدهکار است (طلب من)</option><option value="-1">من به او بدهکارم (بدهی من)</option></select><input class="inp ltr" name="ob" data-money inputmode="numeric" placeholder="مبلغ" autocomplete="off"></div></div>') +
     '<button class="btn blue" type="submit">ذخیره</button>' + (p ? '' : '<button type="button" class="lnk center" id="pf-list">' + ico('file') + 'چند نفر دارید؟ ورود فهرست اشخاص با مانده یک‌جا</button>') + '</form>');
   const pl = sh.q('#pf-list'); if (pl) { if (!can('people')) pl.remove(); else pl.onclick = () => { sh.close(); openingImport('people'); }; }
+  const personDraft=Drafts.attachSheet(sh,'person:'+(p ? 'edit:'+p.id : 'new'));
   sh.q('#pf').onsubmit = async e => {
     e.preventDefault(); const f = sh.q('#pf'); const d = { name: f.name.value, phone: f.phone.value, note: f.note.value, code: f.code.value };
     if (!p) { const ob = f.ob.value.trim() === '' ? 0 : Core.parseMoney(f.ob.value); if (isNaN(ob)) return toast('مبلغ مانده نامعتبر است.', true); d.opening = ob * (+f.obk.value); d.date = today(); }
     const r = p ? Core.editPerson(S, p.id, d) : Core.addPerson(S, d);
-    if (await done(r, 'ذخیره شد.')) { sh.close(); if (!p && r.person) goHash('#/person/' + r.person.id); }
+    if (await done(r, 'ذخیره شد.')) { personDraft.clear(); sh.close(); if (!p && r.person) goHash('#/person/' + r.person.id); }
   };
   autoFocus(() => sh.q('[name=name]'));
 }
@@ -199,140 +210,38 @@ function txForm(type, personId, tx, pre) {
     (t === 'manual' ? '<label class="fld"><span>نوع</span><select class="inp" name="kind"><option value="debit">او به من بدهکار شد (طلب من زیاد شود)</option><option value="credit">من به او بدهکار شدم (بدهی من زیاد شود)</option></select></label>' : '') +
     moneyField('amount', tx ? tx.amount : 0, 'مبلغ (' + UNIT() + ')') + (personId && !tx && isPay ? '<button type="button" class="lnk" id="tf-full">تسویه کامل مانده</button>' : '') +
     (isPay ? acctSel(tx ? tx.acct : (pre && pre.acct)) : '') + dateField('date', tx ? tx.date : today()) + '<label class="fld"><span>شرح</span><input class="inp" name="desc" value="' + esc(tx ? tx.desc : '') + '"></label>' +
-    (isPay && !tx ? '<div class="receipt-zone"><b>فیش بانکی هوشمند</b><p class="hint">عکس بگیرید، از گالری انتخاب کنید یا متن پیامک بانکی را جای‌گذاری کنید. اطلاعات قبل از ثبت باید تأیید شوند.</p>' +
-      '<div class="row2"><button type="button" class="btn ghost" id="tf-camera">📷 گرفتن عکس</button><button type="button" class="btn ghost" id="tf-gallery">🖼 انتخاب از گالری</button></div>' +
-      '<input id="tf-camera-file" type="file" accept="image/*" capture="environment" hidden><input id="tf-gallery-file" type="file" accept="image/*" hidden>' +
-      '<div id="tf-ocr-status" class="hint" role="status" aria-live="polite"></div><button type="button" class="btn ghost sm" id="tf-persian-ocr">خواندن تکمیلی متن فارسی (کندتر)</button>' +
-      '<details class="receipt-manual"><summary>متن فیش یا پیامک بانکی / اصلاح دستی اطلاعات</summary><textarea id="tf-ocr-text" class="inp" rows="5" placeholder="متن پیامک بانکی را اینجا جای‌گذاری کنید یا متن فیش را اصلاح کنید…"></textarea><button type="button" id="tf-ocr-paste" class="btn ghost sm">📋 جای‌گذاری پیامک</button><button type="button" id="tf-ocr-analyze" class="btn ghost sm">بررسی متن فیش یا پیامک</button></details>' +
-      '<div id="tf-ocr-review" hidden></div></div>' : '') + '<button class="btn blue" type="submit">ثبت</button></form>');
+'<button class="btn blue" type="submit">ثبت</button></form>');
   const f = sh.q('#tf'); if (tx && f.kind) f.kind.value = tx.kind;
-  const setP = id => { personId = id; sh.q('#tf-p').textContent = personName(id); };
+  const txDraft = Drafts.attachSheet(sh,'tx:'+t+':'+(tx ? 'edit:'+tx.id : 'new'), {
+    getExtra:()=>({personId}), setExtra:x=>{if(x.personId && Core.byId(S.people,+x.personId)) {personId=+x.personId; sh.q('#tf-p').textContent=personName(personId);}}
+  });
+  const setP = id => { personId = id; sh.q('#tf-p').textContent = personName(id); Drafts.touch(f); };
   if (tx) sh.q('#tf-p').disabled = true; else sh.q('#tf-p').onclick = () => pickList('انتخاب شخص', personItems(), v => setP(+v));
   const full = sh.q('#tf-full'); if (full) full.onclick = () => { const b = Core.balanceOf(S, personId); if (!b) return toast('مانده صفر است.'); f.amount.value = Core.fmtInput((Math.abs(b))); mwUpdate(f.amount); };
-  // The OCR result is a draft only: no transaction is written before the normal form submit.
-  let verifiedReceipt = null;
-  const review = sh.q('#tf-ocr-review'), status = sh.q('#tf-ocr-status'), rawText = sh.q('#tf-ocr-text');
-  if (review) {
-    const setStatus = msg => { status.textContent = msg; };
-    const analyzeText = text => {
-      const r = Core.analyzeBankReceipt(text, S);
-      verifiedReceipt = null;
-      review.hidden = false;
-      review.innerHTML = '<p class="hint">متن تشخیص‌داده‌شده را بررسی کنید. با دکمه زیر فقط فرم تکمیل می‌شود؛ ثبت نهایی جداگانه است.</p>' +
-        '<div class="kv"><span>مبلغ</span><b>' + (r.amountRial ? esc(Core.toFa(String(r.amountRial))) + ' ریال' : 'نامشخص') + '</b>' +
-        '<span>تاریخ</span><b>' + esc(fa(r.date || 'نامشخص')) + '</b><span>ساعت</span><b>' + esc(fa(r.time || 'نامشخص')) + '</b>' +
-        '<span>وضعیت فیش</span><b>' + esc(({pending:'در انتظار / تأییدنشده',registered:'ثبت درخواست، وصول نامشخص',reported_success:'موفق طبق رسید؛ نیازمند تطبیق',unknown:'نامشخص'})[r.status]) + '</b><span>بانک مبدأ</span><b>' + esc(r.sourceBank || 'نامشخص') + '</b><span>بانک مقصد</span><b>' + esc(r.destinationBank || 'نامشخص') + '</b></div>' +
-        '<label class="fld"><span>مبلغ فیش (ریال، قابل اصلاح)</span><input class="inp ltr" inputmode="numeric" id="tf-ocr-amount" value="' + esc(r.amountRial || '') + '" placeholder="مثلاً 183000000"></label>' +
-        '<label class="fld"><span>تاریخ تراکنش (قابل اصلاح)</span><input class="inp ltr" id="tf-ocr-date" value="' + esc(r.date || '') + '" placeholder="1405/08/21"></label>' +
-        '<label class="fld"><span>کد رهگیری (قابل اصلاح)</span><input class="inp ltr" id="tf-ocr-code" value="' + esc(r.trackingCode || '') + '" placeholder="کد رهگیری"></label>' +
-        '<label class="fld"><span>ساعت (قابل اصلاح)</span><input class="inp ltr" id="tf-ocr-time" value="' + esc(r.time || '') + '" placeholder="مثلاً 14:05"></label>' +
-        '<label class="fld"><span>بانک مبدأ (قابل اصلاح)</span><input class="inp" id="tf-ocr-source" value="' + esc(r.sourceBank || '') + '"></label>' +
-        '<label class="fld"><span>بانک مقصد (قابل اصلاح)</span><input class="inp" id="tf-ocr-dest" value="' + esc(r.destinationBank || '') + '"></label>' +
-        (r.warnings.length ? '<div class="receipt-warnings">' + r.warnings.map(x => '<p>⚠ ' + esc(x) + '</p>').join('') + '</div>' : '') +
-        '<label class="fld"><span><input type="checkbox" id="tf-ocr-settled"> وصول وجه را مستقلاً از حساب مقصد یا گردش حساب تأیید کرده‌ام</span></label>' +
-        '<button type="button" class="btn green" id="tf-ocr-apply">تأیید اطلاعات و انتقال به فرم</button>';
-      sh.q('#tf-ocr-apply').onclick = () => {
-        const trackingCode = Core.toEn(sh.q('#tf-ocr-code').value).replace(/\s/g, '').trim();
-        const enteredAmount = Number(Core.toEn(sh.q('#tf-ocr-amount').value).replace(/[,٬،\s]/g, ''));
-        if (!Number.isSafeInteger(enteredAmount) || enteredAmount <= 0) return toast('مبلغ ریالی فیش را بررسی کنید.', true);
-        // The main form uses the user's configured unit (rial or toman), while OCR always returns rial.
-        const formAmount = UNIT() === 'تومان' ? enteredAmount / 10 : enteredAmount;
-        if (!Number.isSafeInteger(formAmount)) return toast('مبلغ ریالی به تومان صحیح قابل تبدیل نیست.', true);
-        f.amount.value = Core.fmtInput(formAmount); mwUpdate(f.amount);
-        const reviewedDate = Core.toEn(sh.q('#tf-ocr-date').value.trim());
-        if (!/^(?:1[34]\d{2}|20\d{2})\/(?:0?[1-9]|1[0-2])\/(?:0?[1-9]|[12]\d|3[01])$/.test(reviewedDate))
-          return toast('تاریخ فیش را به شکل 1405/08/21 وارد کنید.', true);
-        if (reviewedDate) {
-          if (/^1[34]\d{2}\//.test(reviewedDate)) f.date.value = fa(reviewedDate);
-          else if (/^20\d{2}\//.test(reviewedDate)) {
-            const date = reviewedDate.replace(/\//g, '-');
-            try { f.date.value = fa(Core.isoToJalali(date)); } catch (e) { /* user can enter date */ }
-          }
-        }
-        // Don't auto-select bank based on bank name: an owner can have multiple accounts at the same bank.
-        // Track code and bank references within the normal transaction description, which is included in backups.
-        verifiedReceipt = { trackingCode, status: r.status, independentlySettled: sh.q('#tf-ocr-settled').checked, time: sh.q('#tf-ocr-time').value.trim().slice(0, 12), sourceBank: sh.q('#tf-ocr-source').value.trim().slice(0, 100), destinationBank: sh.q('#tf-ocr-dest').value.trim().slice(0, 100) };
-        setStatus('اطلاعات به فرم منتقل شد. حساب بانکی و مبلغ را بررسی کنید و برای ثبت نهایی دکمه «ثبت» را بزنید.');
-        review.hidden = true;
-      };
-    };
-    sh.q('#tf-ocr-analyze').onclick = () => analyzeText(rawText.value);
-    sh.q('#tf-ocr-paste').onclick = async () => { try { if (!navigator.clipboard || !navigator.clipboard.readText) throw Error('دسترسی کلیپ‌بورد موجود نیست'); const text = await navigator.clipboard.readText(); if (!text.trim()) throw Error('متن کپی‌شده خالی است'); rawText.value = text; rawText.dataset.userEdited = '1'; analyzeText(text); } catch (e) { setStatus('پیامک را کپی کرده و در کادر متن نگه‌دارید و Paste را انتخاب کنید؛ سپس «بررسی متن» را بزنید.'); rawText.focus(); } };
-    // Native APK never prewarms WASM. Browser-only builds may initialize in the background.
-    if (!ReceiptOCR.nativePlugin()) ReceiptOCR.prewarm();
-    let photoRun = 0;
-    let selectedPhoto = null;
-    const processPhoto = async (input, persianMode = false) => {
-      const file = persianMode ? selectedPhoto : (input.files && input.files[0]); if (!persianMode) input.value = ''; if (!file) return;
-      selectedPhoto = file;
-      const runId = ++photoRun;
-      rawText.dataset.userEdited = '0';
-      review.hidden = true; verifiedReceipt = null;
-      let slowTimer;
-      try {
-        setStatus('در حال آماده‌سازی و خواندن عکس…');
-        // Never leave the user staring at a frozen 0%. If the two-second
-        // target is exceeded, expose the manual path while OCR continues.
-        slowTimer = setTimeout(() => {
-          if (runId !== photoRun || !sh.el.isConnected) return;
-          setStatus('پردازش بیشتر از ۲ ثانیه طول کشید. می‌توانید هم‌زمان متن را دستی وارد کنید؛ نتیجه عکس پس از آماده‌شدن نمایش داده می‌شود.');
-        }, 2000);
-        const result = await (persianMode ? ReceiptOCR.recognize : ReceiptOCR.fastRecognize)(file, (msg, progress) => {
-          if (runId !== photoRun || !sh.el.isConnected) return;
-          // Initialization is not progress; 0% during model loading is misleading.
-          if (msg === 'خواندن متن عکس' && progress > 0) setStatus('در حال خواندن متن فیش… ' + fa(Math.round(progress * 100)) + '٪');
-          else if (msg !== 'خواندن متن عکس') setStatus(msg + '…');
-        });
-        if (runId !== photoRun || !sh.el.isConnected) return;
-        if (rawText.dataset.userEdited === '1') {
-          setStatus('متن فیش را دستی ویرایش کرده‌اید؛ نتیجه OCR برای جلوگیری از جایگزینی تغییرات شما اعمال نشد.');
-          return;
-        }
-        rawText.value = result.text;
-        analyzeText(result.text);
-        const parsed = Core.analyzeBankReceipt(result.text, S);
-        if (!persianMode && (!parsed.amountRial || !parsed.date || !parsed.trackingCode)) {
-          setStatus('موتور سریع لاتین نتوانست فیش فارسی را کامل بخواند. این نتیجه قابل ثبت بدون بررسی نیست. «خواندن تکمیلی متن فارسی» را بزنید یا مبلغ و تاریخ را دستی اصلاح کنید.');
-        } else {
-          setStatus('خواندن ' + (persianMode ? 'تکمیلی فارسی' : 'سریع عددی') + ' انجام شد. اطلاعات شناسایی‌شده را با تصویر تطبیق دهید.');
-        }
-      } catch (err) {
-        if (runId === photoRun && sh.el.isConnected)
-          setStatus('خواندن عکس انجام نشد: ' + (err.message || String(err)) + '؛ می‌توانید OCR فارسی تکمیلی را انتخاب یا اطلاعات را دستی وارد کنید.');
-      } finally { clearTimeout(slowTimer); }
-    };
-    const camera = sh.q('#tf-camera-file'), gallery = sh.q('#tf-gallery-file');
-    sh.q('#tf-camera').onclick = () => camera.click();
-    sh.q('#tf-gallery').onclick = () => gallery.click();
-    camera.onchange = () => processPhoto(camera);
-    gallery.onchange = () => processPhoto(gallery);
-    sh.q('#tf-persian-ocr').onclick = () => { if (!selectedPhoto) return setStatus('ابتدا عکس فیش را از دوربین یا گالری انتخاب کنید.'); processPhoto(null, true); };
-    rawText.oninput = () => { rawText.dataset.userEdited = '1'; verifiedReceipt = null; review.hidden = true; setStatus('متن فیش تغییر کرد؛ دوباره «بررسی متن فیش» را بزنید.'); };
-  }
   f.onsubmit = async e => {
     e.preventDefault(); const amount = Core.parseMoney(f.amount.value), date = readDate(f, 'date');
     if (!date) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true);
     if (!tx && !gate()) return;
-    if (verifiedReceipt && ['pending','registered','unknown'].includes(verifiedReceipt.status) && !verifiedReceipt.independentlySettled) return toast('وصول این فیش تأیید نشده است. ابتدا گردش حساب مقصد را بررسی کنید.', true);
-    if (verifiedReceipt && verifiedReceipt.trackingCode) {
-      const duplicate = Core.analyzeBankReceipt('کد رهگیری: ' + verifiedReceipt.trackingCode, S).duplicateCandidates;
-      if (duplicate.length && !(await confirmBox('این کد رهگیری قبلاً در ' + fa(duplicate.length) + ' تراکنش ثبت شده است. احتمال ثبت فیش تکراری وجود دارد. باز هم ثبت شود؟', 'با وجود تکراری بودن ثبت کن'))) return;
-    }
     if (f.acct && t === 'payment' && !(await cashGuard(+f.acct.value, amount - (tx && tx.acct === +f.acct.value ? tx.amount : 0), date))) return;
-    const receiptNote = verifiedReceipt ? [verifiedReceipt.trackingCode ? 'کد رهگیری ' + verifiedReceipt.trackingCode : '', verifiedReceipt.time ? 'ساعت ' + verifiedReceipt.time : '', verifiedReceipt.status ? 'وضعیت فیش ' + verifiedReceipt.status : '', verifiedReceipt.sourceBank ? 'بانک مبدأ ' + verifiedReceipt.sourceBank : '', verifiedReceipt.destinationBank ? 'بانک مقصد ' + verifiedReceipt.destinationBank : ''].filter(Boolean).join(' | ') : '';
-    const desc = [f.desc.value.trim() || titles[t], receiptNote].filter(Boolean).join(' | ');
+    const desc = f.desc.value.trim() || titles[t];
     const r = tx ? Core.editTx(S, tx.id, { amount, date, desc: f.desc.value, kind: f.kind ? f.kind.value : tx.kind, acct: f.acct ? +f.acct.value : null })
       : Core.addTx(S, { personId, type: t, kind: f.kind ? f.kind.value : null, amount, date, desc, acct: f.acct ? +f.acct.value : null, ref: pre && pre.ref || null });
-    if (await done(r, 'ثبت شد.')) { if (!tx) bumpUsage(); sh.close(); }
+    if (await done(r, 'ثبت شد.')) { if (!tx) bumpUsage(); txDraft.clear(); sh.close(); }
   };
 }
 function transferForm(fromId, group) {
   const ti = group ? Core.transferInfo(S, group) : null;
   let from = ti ? ti.fromId : (fromId || null), to = ti ? ti.toId : null;
   const sh = sheet(ti ? 'ویرایش حواله' : 'حواله بین دو شخص', '<form id="xf"><label class="fld"><span>از حساب (پرداخت‌کننده)</span><button type="button" class="inp pick" id="xf-a">' + esc(from ? personName(from) : 'انتخاب…') + '</button></label><label class="fld"><span>به حساب (دریافت‌کننده)</span><button type="button" class="inp pick" id="xf-b">' + esc(to ? personName(to) : 'انتخاب…') + '</button></label>' + moneyField('amount', ti ? ti.amount : 0, 'مبلغ') + dateField('date', ti ? ti.date : today()) + '<label class="fld"><span>شرح</span><input class="inp" name="desc" value="' + esc(ti ? ti.desc : '') + '"></label><p class="hint">مبلغ از حساب مبدأ کم و به حساب مقصد اضافه می‌شود.</p><button class="btn blue" type="submit">' + (ti ? 'ذخیره تغییرات' : 'ثبت حواله') + '</button></form>');
-  sh.q('#xf-a').onclick = () => pickList('از حساب', personItems(), v => { from = +v; sh.q('#xf-a').textContent = personName(from); });
-  sh.q('#xf-b').onclick = () => pickList('به حساب', personItems(), v => { to = +v; sh.q('#xf-b').textContent = personName(to); });
-  const f = sh.q('#xf'); f.onsubmit = async e => { e.preventDefault(); const date = readDate(f, 'date'), amount = Core.parseMoney(f.amount.value); if (!date) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); if (ti) { if (await done(Core.editTransfer(S, group, { fromId: from, toId: to, amount, date, desc: f.desc.value }), 'حواله اصلاح شد.')) sh.close(); return; } if (!gate()) return; if (await done(Core.addTransfer(S, { fromId: from, toId: to, amount, date, desc: f.desc.value }), 'حواله ثبت شد.')) { bumpUsage(); sh.close(); } };
+  const transferDraft = Drafts.attachSheet(sh,'transfer:'+(ti ? 'edit:'+group : 'new'), {
+    getExtra:()=>({from,to}), setExtra:x=>{
+      if(x.from && Core.byId(S.people,+x.from)){from=+x.from;sh.q('#xf-a').textContent=personName(from);}
+      if(x.to && Core.byId(S.people,+x.to)){to=+x.to;sh.q('#xf-b').textContent=personName(to);}
+    }
+  });
+  sh.q('#xf-a').onclick = () => pickList('از حساب', personItems(), v => { from = +v; sh.q('#xf-a').textContent = personName(from); Drafts.touch(sh.q('#xf')); });
+  sh.q('#xf-b').onclick = () => pickList('به حساب', personItems(), v => { to = +v; sh.q('#xf-b').textContent = personName(to); Drafts.touch(sh.q('#xf')); });
+  const f = sh.q('#xf'); f.onsubmit = async e => { e.preventDefault(); const date = readDate(f, 'date'), amount = Core.parseMoney(f.amount.value); if (!date) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); if (ti) { if (await done(Core.editTransfer(S, group, { fromId: from, toId: to, amount, date, desc: f.desc.value }), 'حواله اصلاح شد.')) {transferDraft.clear();sh.close();} return; } if (!gate()) return; if (await done(Core.addTransfer(S, { fromId: from, toId: to, amount, date, desc: f.desc.value }), 'حواله ثبت شد.')) { bumpUsage(); transferDraft.clear(); sh.close(); } };
 }
 function txOpen(id) {
   const t = Core.byId(S.tx, id); if (!t) return;
@@ -414,6 +323,9 @@ function invoiceText(i) {
   return ['فاکتور ' + Core.TYPE_FA[i.type] + ' شماره ' + fa(i.no), 'فروشنده: ' + ((weSell ? me : them) || '—'), 'خریدار: ' + ((weSell ? them : me) || '—'), 'تاریخ: ' + fmtDate(i.date), ''].concat(info.lines.map(l => '• ' + prodName(l.productId) + ' × ' + Core.fmtQty(l.qty) + ' × ' + fmt(l.price) + ' = ' + fmt(l.gross) + (l.note ? ' (' + l.note + ')' : '')), ['', 'جمع: ' + fmt(info.sub)], info.discount ? ['تخفیف: ' + fmt(info.discount)] : [], info.vat ? ['ارزش افزوده (' + fa(info.vatRate) + '٪): ' + fmt(info.vat)] : [], ['مبلغ نهایی: ' + fmt(info.total) + ' ' + UNIT(), '(به حروف: ' + Core.moneyWords(info.total) + ')', 'پرداخت‌شده: ' + fmt(info.paid), 'مانده: ' + fmt(info.remaining)], ['', '— حسابداری فیکس کوییک' + (licOk ? '' : ' · fixq.ir')]).join('\n');
 }
 
+/* Each invoice type gets its own unsaved draft; edits have separate keys. */
+function invoiceDraftKey(type,ed) { return ed ? 'invoice:edit:' + ed.id : 'invoice:' + type; }
+
 /* new invoice page */
 function pageNewInvoice(type, preset) {
   const ed = preset && preset.edit ? preset.edit : null;
@@ -427,7 +339,7 @@ function pageNewInvoice(type, preset) {
   let h = ed ? '<div class="alert">' + ico('edit') + 'در حال ویرایش فاکتور ' + Core.TYPE_FA[type] + ' شماره ' + fa(ed.no) + '. بعد از ذخیره، حساب شخص، انبار و سود و زیان خودکار اصلاح می‌شوند.</div>' : '<div class="chips">' + Object.keys(Core.TYPE_FA).map(k => '<button type="button" class="chip' + (k === type ? ' on' : '') + '" data-act="newInv" data-t="' + k + '"' + (personId ? ' data-p="' + personId + '"' : '') + '>' + Core.TYPE_FA[k] + '</button>').join('') + '</div>';
   h += '<form id="nf" class="card"' + (ed ? ' data-edit="' + ed.id + '"' : '') + '><input type="hidden" name="type" value="' + type + '"><input type="hidden" name="pid" value="' + (personId || '') + '"><input type="hidden" name="vr" value="' + vr + '"><div class="fld"><span>' + (isSaleSide ? 'مشتری' : 'تأمین‌کننده / فروشنده') + '</span><div class="pwrap"><button type="button" class="inp pick" id="nf-p" data-act="pickInvPerson">' + (personId ? esc(personName(personId)) : 'انتخاب شخص…') + '</button><button type="button" class="pclr" id="nf-px" data-act="clrInvPerson" aria-label="حذف شخص انتخاب‌شده"' + (personId ? '' : ' hidden') + '>' + ico('x') + '</button></div></div><div class="row2">' + dateField('date', ed ? ed.date : today()) + '<label class="fld"><span>شماره فاکتور</span><input class="inp ltr" name="no" inputmode="numeric" value="' + fa(ed ? ed.no : Core.nextInvoiceNo(S, type)) + '"></label></div>' +
     (Core.multiWh(S) ? whSel(ed ? Core.whOf(S, ed) : (UI.lastWh != null && Core.whList(S).some(w => w.id === UI.lastWh && !w.archived) ? UI.lastWh : Core.mainWh(S)), 'wh', type === 'purchase' || type === 'sale_return' ? 'ورود به انبار' : 'خروج از انبار') : '') +
-    '<div class="ch">اقلام</div><div id="rows"></div><div class="row2"><button type="button" class="btn ghost" data-act="addRow">+ افزودن قلم</button><button type="button" class="btn ghost" data-act="scanInv">' + ico('scan') + 'اسکن کالا</button></div>' +
+    '<div class="row2 draft-tools"><button type="button" class="btn ghost" data-act="invStockPause">🔎 بررسی انبار (با حفظ پیش‌نویس)</button><button type="button" class="btn ghost red" data-act="invDraftDiscard">حذف پیش‌نویس</button></div><div class="ch">اقلام</div><div id="rows"></div><div class="row2"><button type="button" class="btn ghost" data-act="addRow">+ افزودن قلم</button><button type="button" class="btn ghost" data-act="scanInv">' + ico('scan') + 'اسکن کالا</button></div>' +
     '<div class="sumbox"><div class="kv"><span>جمع اقلام</span><b id="s-sub">۰</b></div></div>' + moneyField('discount', ed ? ed.discount : 0, 'تخفیف (' + UNIT() + ')').replace('</span>', ' ' + help('discount') + '</span>') +
     '<label class="chk vatchk"' + (feat('vat') || vatOn ? '' : ' hidden') + '><input type="checkbox" name="vat"' + (vatOn ? ' checked' : '') + '> ارزش افزوده (' + fa(vr) + '٪) ' + help('vat') + '</label><div class="sumbox" id="s-vatbox"><div class="kv"><span>ارزش افزوده</span><b id="s-vat">۰</b></div></div>' +
     '<div class="sumbox"><div class="kv"><span>مبلغ نهایی</span><b class="big" id="s-tot">۰ ' + UNIT() + '</b></div><small class="mw tot" id="s-totw"></small></div>' + moneyField('paid', first ? first.amount : 0, payLabel) + '<div class="row2"><button type="button" class="lnk" data-act="payFull">تسویه کامل</button></div>' + acctSel(first ? first.acct : null) +
@@ -435,7 +347,20 @@ function pageNewInvoice(type, preset) {
   return { title: ed ? 'ویرایش فاکتور ' + fa(ed.no) : 'فاکتور ' + Core.TYPE_FA[type], html: h, back: ed ? '#/inv/' + ed.id : '#/invoices', mount: () => {
     if (ed) ed.items.forEach(l => { addRow(); const rows = $$('.it-row'), r = rows[rows.length - 1], pr = Core.byId(S.products, l.productId); r.dataset.pid = l.productId; $('.pick', r).textContent = pr ? pr.name : '—'; $('[name=qty]', r).value = fa(l.qty); $('[name=price]', r).value = Core.fmtInput((l.price)); $('[name=sn]', r).value = l.note || ''; });
     else { addRow(); if (preset && preset.i) String(preset.i).split(',').forEach((x, k) => { const [id, q] = x.split(':'), pr = Core.byId(S.products, +id); if (!pr) return; if (k) addRow(); const rows = $$('.it-row'), r = rows[rows.length - 1]; fillRowProduct(r, pr); if (+q > 0) $('[name=qty]', r).value = fa(+q); }); }
-    calcInvoice(); const f = $('#nf'); f.addEventListener('input', calcInvoice); f.addEventListener('change', calcInvoice); f.onsubmit = submitInvoice; } };
+    calcInvoice(); const f = $('#nf'); f.addEventListener('input', calcInvoice); f.addEventListener('change', calcInvoice); f.onsubmit = submitInvoice;
+    const dk = invoiceDraftKey(type,ed);
+    Drafts.bind(f,dk,{
+      getExtra: () => ({rows: $$('.it-row',f).map(r=>({pid:r.dataset.pid || '',qty:$('[name=qty]',r).value,price:$('[name=price]',r).value,note:$('[name=sn]',r).value}))}),
+      beforeRestore: ex => { if (!Array.isArray(ex.rows)) return;
+        const rows=$('#rows'); rows.innerHTML='';
+        ex.rows.slice(0,200).forEach(v=>{ addRow(); const row=$$('.it-row',f).slice(-1)[0]; const pr=Core.byId(S.products,+v.pid);
+          if(pr){ row.dataset.pid=pr.id; $('.pick',row).textContent=pr.name; }
+          $('[name=qty]',row).value=String(v.qty ?? '1'); $('[name=price]',row).value=String(v.price ?? ''); $('[name=sn]',row).value=String(v.note ?? '');
+        }); if (!$$('.it-row',f).length) addRow();
+      },
+      afterRestore:()=>calcInvoice()
+    });
+  } };
 }
 function addRow() {
   const rows = $('#rows'), d = document.createElement('div'); d.className = 'it-row'; d.dataset.pid = '';
@@ -500,7 +425,7 @@ async function submitInvoice(e) {
   if (f.wh) { d.wh = +f.wh.value; UI.lastWh = d.wh; }
   const r = editId ? Core.editInvoice(S, editId, d) : Core.addInvoice(S, d);
   if (!r.ok) return toast(r.error, true);
-  S.settings.vatOn = f.vat.checked; if (!editId) bumpUsage(); if (!(await save())) return; toast(editId ? 'تغییرات فاکتور ذخیره شد.' : 'فاکتور ثبت شد.'); goHash('#/inv/' + r.invoice.id);
+  S.settings.vatOn = f.vat.checked; if (!editId) bumpUsage(); if (!(await save())) return; Drafts.clear(f); toast(editId ? 'تغییرات فاکتور ذخیره شد.' : 'فاکتور ثبت شد.'); goHash('#/inv/' + r.invoice.id);
 }
 
 /* ─────────── PRODUCTS ─────────── */
@@ -533,6 +458,9 @@ function pageProducts() {
   const PS = PROD_SORT.some(x => x[0] === UI.prodSort) ? UI.prodSort : 'cat';
   st.forEach(x => { x.cat = Core.catOf(x.product); }); if (PS !== 'cat') { const sold = PS === 'sold' ? Core.soldQty(S) : null, nm = (a, b) => faCmp(a.product.name, b.product.name); st.sort({ name: nm, stock_desc: (a, b) => b.stock - a.stock || nm(a, b), stock_asc: (a, b) => a.stock - b.stock || nm(a, b), value_desc: (a, b) => b.value - a.value || nm(a, b), price_desc: (a, b) => (b.product.salePrice || 0) - (a.product.salePrice || 0) || nm(a, b), price_asc: (a, b) => (a.product.salePrice || 0) - (b.product.salePrice || 0) || nm(a, b), sold: (a, b) => (sold[b.product.id] || 0) - (sold[a.product.id] || 0) || nm(a, b), new: (a, b) => b.product.id - a.product.id }[PS]); } else if (UI.prodQ.trim()) { const q = UI.prodQ; const serialIds = Core.serialProductIds(S, q); st.forEach(x => { x.qs = serialIds.has(x.product.id) ? 12 : Core.matchScore(x.product.name + ' ' + (x.product.sku || '') + ' ' + x.cat, q); }); st.sort((a, b) => b.qs - a.qs || faCmp(a.product.name, b.product.name)); } else st.sort((a, b) => (UI.prodCat ? 0 : Core.catRank(a.cat) - Core.catRank(b.cat) || faCmp(a.cat, b.cat)) || faCmp(a.product.name, b.product.name));
   let h = '<div class="stats">' + stat('تعداد کالا', fa(all.length), '', fa(cats.length) + ' دسته') + (can('cost') ? stat('ارزش کل انبار', fmt(Core.inventoryValue(S)), '', UNIT()) : stat('دسته‌ها', fa(cats.length))) + '</div>';
+  const backInvoice = Drafts.list().find(d => d.kind.startsWith('invoice:') &&
+    (!d.kind.startsWith('invoice:purchase') || can('purchase')) && (!d.kind.startsWith('invoice:edit:') || can('edit')));
+  if(backInvoice) h = '<button type="button" class="btn green draft-return" data-act="resumeDraft" data-k="' + esc(backInvoice.kind) + '">↩ بازگشت به فاکتور نیمه‌تمام (بدون از دست رفتن اقلام)</button>' + h;
   h += '<div class="toolbar ptools"><button class="btn blue sm" data-act="bulkProducts">' + ico('listplus') + 'افزودن چند کالا</button><button class="btn ghost sm" data-act="scanProd">' + ico('scan') + 'اسکن</button><button class="btn ghost sm" data-act="labelsAll">' + ico('qr') + 'برچسب</button><button class="btn ghost sm" data-act="go" data-h="#/stock">' + ico('up') + 'تحلیل انبار</button><button class="btn ghost sm" data-act="whTools">' + ico('archive') + 'پشتیبان و حذف</button><button class="btn ghost sm" data-act="openImport" data-k="stock">' + ico('file') + 'ورود موجودی اول دوره</button></div>';
   h += sbox('prod-q', 'prodQ', 'جستجوی کالا یا دسته…', UI.prodQ) + rangeBar('prod') + (pmv ? '<p class="hint">' + fa(st.length) + ' کالا در این بازه گردش داشته است.</p>' : '') + stockSwitch(only ? fa(inS.length) + ' کالا موجود · جمع ' + Core.fmtQty(Math.round(inS.reduce((t, x) => t + x.stock, 0) * 1000) / 1000) + ' عدد' : fa(inS.length) + ' کالا از ' + fa(all.length) + ' موجودی دارد') + (cats.length ? catChips(cats, UI.prodCat || '', only ? inS.length : all.length) : '') + sortSel('prodSort', PS, PROD_SORT.filter(x => x[0] !== 'value_desc' || can('cost')));
   if (st.length) {
@@ -548,8 +476,8 @@ function pageProducts() {
 function productForm(p, o) {
   o = o || {};
   const sh = sheet(p ? 'ویرایش کالا' : o.inInvoice ? 'کالای جدید (به انبار هم اضافه می‌شود)' : 'کالای جدید', '<form id="gf"><label class="fld"><span>نام کالا</span><input class="inp" name="name" value="' + esc(p ? p.name : '') + '" autocomplete="off"></label><div class="row2"><label class="fld"><span>کد کالا</span><input class="inp ltr" name="sku" value="' + esc(p ? p.sku : Core.nextCode(S, 'product')) + '"></label><label class="fld"><span>واحد</span><input class="inp" name="unit" value="' + esc(p ? p.unit : 'عدد') + '"></label></div><label class="fld"><span>دسته‌بندی ' + help('category') + ' <small class="cat-auto">(خودکار از روی نام؛ در صورت نیاز عوض کنید)</small></span><input class="inp" name="cat" list="cat-list" autocomplete="off" value="' + esc(p ? Core.catOf(p) : (o.cat || '')) + '" data-auto="' + (p && p.category ? '0' : '1') + '"><datalist id="cat-list">' + Array.from(new Set(Core.CATS.concat(S.products.map(Core.catOf)))).map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></label><label class="fld"><span>بارکد کارخانه (اختیاری)</span><div class="inrow"><input class="inp ltr" name="barcode" value="' + esc(p ? (p.barcode || '') : (o.barcode || '')) + '" autocomplete="off"><button type="button" class="btn ghost sm" id="gf-scan">' + ico('scan') + '</button></div></label>' + moneyField('salePrice', p ? p.salePrice : 0, 'قیمت فروش پیش‌فرض') + moneyField('buyPrice', p ? p.buyPrice : 0, 'قیمت خرید پیش‌فرض') + (o.inInvoice || (p && !can('warehouse')) ? '' : '<label class="fld"><span>موجودی اولیه (اختیاری)</span><input class="inp ltr" name="openQty" inputmode="decimal" placeholder="۰" autocomplete="off" value="' + (p && Core.openingOf(S, p.id) ? fa(Core.openingOf(S, p.id).qty) : '') + '"></label>' + (p ? '<p class="hint">' + (Core.openingOf(S, p.id) ? 'این کالا ' + fa(Core.openingOf(S, p.id).qty) + ' عدد موجودی اولیه دارد؛ برای اصلاح، عدد را عوض کنید (صفر = حذف موجودی اولیه).' : 'اگر از قبل از این کالا دارید (مثلاً کالایی که با «افزودن چند کالا» یا دسته‌بندی وارد شده)، تعدادش را بنویسید.') + ' موجودی اولیه قبل از همه خرید و فروش‌های این کالا حساب می‌شود.</p>' : '') + (p ? '' : '<p class="hint">اگر همین الان از این کالا دارید، تعدادش را بنویسید. با «قیمت خرید» بالا در انبار ثبت می‌شود و در سود و زیان حساب نمی‌شود. اگر فقط می‌خواهید نام کالا در فهرست باشد، فقط «نام کالا» را بنویسید و بقیه را خالی بگذارید.</p>')) + '<label class="fld"><span>حداقل موجودی (هشدار) ' + help('minstock') + '</span><input class="inp ltr" name="minStock" inputmode="decimal" value="' + fa(p ? p.minStock : 0) + '"></label><label class="chk"><input type="checkbox" name="sreq"' + (p ? (Core.serialRequired(S, p) ? ' checked' : '') : '') + '> سریال‌دار (برای هر عدد، سریال یا IMEI در فاکتور الزامی است) ' + help('serial') + '</label><button class="btn blue" type="submit">ذخیره</button></form>');
-  const f = sh.q('#gf'); if (!feat('qr')) sh.q('#gf-scan').remove(); let sreqTouched = !!p; f.sreq.addEventListener('change', () => { sreqTouched = true; }); const syncSreq = () => { if (!sreqTouched) f.sreq.checked = Core.serialAuto(S, f.cat.value.trim() || Core.guessCategory(f.name.value)); }; f.name.addEventListener('input', () => { if (f.cat.dataset.auto === '1') f.cat.value = f.name.value.trim() ? Core.guessCategory(f.name.value) : ''; syncSreq(); }); f.cat.addEventListener('input', syncSreq); f.cat.addEventListener('input', () => { f.cat.dataset.auto = f.cat.value.trim() ? '0' : '1'; }); if (sh.q('#gf-scan')) sh.q('#gf-scan').onclick = () => openScanner({ title: 'اسکن بارکد کالا', onCode: t => { f.barcode.value = t; } }); f.onsubmit = async e => { e.preventDefault(); const d = { name: f.name.value, barcode: f.barcode.value, sku: f.sku.value, unit: f.unit.value, salePrice: Core.parseMoney(f.salePrice.value || '0'), buyPrice: Core.parseMoney(f.buyPrice.value || '0'), minStock: Core.parseNum(f.minStock.value || '0'), category: f.cat.value.trim() }; const autoS = Core.serialAuto(S, d.category || Core.guessCategory(d.name)); d.serialReq = f.sreq.checked === autoS ? null : f.sreq.checked; if (isNaN(d.salePrice) || isNaN(d.buyPrice) || isNaN(d.minStock)) return toast('مقادیر عددی نامعتبر است.', true); const oq = (f.openQty && f.openQty.value.trim() !== '') ? Core.parseNum(f.openQty.value) : 0; if (isNaN(oq) || oq < 0) return toast('موجودی اولیه نامعتبر است.', true); const oc = p && Core.openingOf(S, p.id); if (oq > 0 && !(d.buyPrice > 0) && !(oc && oc.cost > 0)) return toast('برای موجودی اولیه، قیمت خرید را هم وارد کنید.', true); const bakP = p ? Object.assign({}, p) : null; let r = p ? Core.editProduct(S, p.id, d) : Core.addProduct(S, d); if (o.onSaved && r.ok && !p) { await save(); sh.close(); toast('کالا به انبار اضافه شد.'); o.onSaved(r.product); return; } if (r.ok && p && f.openQty && (oq !== (oc ? oc.qty : 0) || (oc && oq > 0 && d.buyPrice > 0 && d.buyPrice !== oc.cost))) { const a = Core.setOpeningStock(S, p.id, oq, d.buyPrice); if (!a.ok) { Object.keys(p).forEach(k => delete p[k]); Object.assign(p, bakP); Core._pv++; toast(a.error, true); return; } }
- if (r.ok && !p && oq > 0) { const a = Core.setOpeningStock(S, r.product.id, oq, d.buyPrice); if (!a.ok) { Core.deleteProduct(S, r.product.id); r = a; } } if (await done(r, 'ذخیره شد.')) sh.close(); };
+  const f = sh.q('#gf'); const productDraft=Drafts.attachSheet(sh,'product:'+(p ? 'edit:'+p.id : o.inInvoice ? 'invoice:new' : 'new')); if (!feat('qr')) sh.q('#gf-scan').remove(); let sreqTouched = !!p; f.sreq.addEventListener('change', () => { sreqTouched = true; }); const syncSreq = () => { if (!sreqTouched) f.sreq.checked = Core.serialAuto(S, f.cat.value.trim() || Core.guessCategory(f.name.value)); }; f.name.addEventListener('input', () => { if (f.cat.dataset.auto === '1') f.cat.value = f.name.value.trim() ? Core.guessCategory(f.name.value) : ''; syncSreq(); }); f.cat.addEventListener('input', syncSreq); f.cat.addEventListener('input', () => { f.cat.dataset.auto = f.cat.value.trim() ? '0' : '1'; }); if (sh.q('#gf-scan')) sh.q('#gf-scan').onclick = () => openScanner({ title: 'اسکن بارکد کالا', onCode: t => { f.barcode.value = t; } }); f.onsubmit = async e => { e.preventDefault(); const d = { name: f.name.value, barcode: f.barcode.value, sku: f.sku.value, unit: f.unit.value, salePrice: Core.parseMoney(f.salePrice.value || '0'), buyPrice: Core.parseMoney(f.buyPrice.value || '0'), minStock: Core.parseNum(f.minStock.value || '0'), category: f.cat.value.trim() }; const autoS = Core.serialAuto(S, d.category || Core.guessCategory(d.name)); d.serialReq = f.sreq.checked === autoS ? null : f.sreq.checked; if (isNaN(d.salePrice) || isNaN(d.buyPrice) || isNaN(d.minStock)) return toast('مقادیر عددی نامعتبر است.', true); const oq = (f.openQty && f.openQty.value.trim() !== '') ? Core.parseNum(f.openQty.value) : 0; if (isNaN(oq) || oq < 0) return toast('موجودی اولیه نامعتبر است.', true); const oc = p && Core.openingOf(S, p.id); if (oq > 0 && !(d.buyPrice > 0) && !(oc && oc.cost > 0)) return toast('برای موجودی اولیه، قیمت خرید را هم وارد کنید.', true); const bakP = p ? Object.assign({}, p) : null; let r = p ? Core.editProduct(S, p.id, d) : Core.addProduct(S, d); if (o.onSaved && r.ok && !p) { if (!(await save())) return; productDraft.clear(); sh.close(); toast('کالا به انبار اضافه شد.'); o.onSaved(r.product); return; } if (r.ok && p && f.openQty && (oq !== (oc ? oc.qty : 0) || (oc && oq > 0 && d.buyPrice > 0 && d.buyPrice !== oc.cost))) { const a = Core.setOpeningStock(S, p.id, oq, d.buyPrice); if (!a.ok) { Object.keys(p).forEach(k => delete p[k]); Object.assign(p, bakP); Core._pv++; toast(a.error, true); return; } }
+ if (r.ok && !p && oq > 0) { const a = Core.setOpeningStock(S, r.product.id, oq, d.buyPrice); if (!a.ok) { Core.deleteProduct(S, r.product.id); r = a; } } if (await done(r, 'ذخیره شد.')) { productDraft.clear(); sh.close(); } };
   autoFocus(() => f.name);
 }
 function bulkProducts() {
@@ -661,7 +589,7 @@ function pageExpenses() {
 function expenseForm(e, pre) {
   const sh = sheet(e ? 'ویرایش هزینه' : 'هزینه جدید', '<form id="ef"><label class="fld"><span>عنوان</span><input class="inp" name="title" value="' + esc(e ? e.title : '') + '"></label>' + moneyField('amount', e ? e.amount : 0, 'مبلغ') + '<div class="row2"><label class="fld"><span>دسته (اختیاری)</span><input class="inp" name="cat" value="' + esc(e ? e.category : '') + '" list="cats"><datalist id="cats">' + [...new Set(S.expenses.map(x => x.category).filter(Boolean))].map(c => '<option value="' + esc(c) + '">').join('') + '</datalist></label>' + acctSel(e ? e.acct : (pre && pre.acct)) + '</div>' + dateField('date', e ? e.date : today()) + '<div class="row2"><button class="btn blue" type="submit">ذخیره</button>' + (e ? '<button class="btn red" type="button" data-del>حذف</button>' : '') + '</div></form>' + (e && routeAllowed('vouchers') ? '<button class="btn ghost" data-doc>' + ico('file') + 'سند حسابداری این هزینه</button>' : ''));
   const dc = sh.q('[data-doc]'); if (dc) dc.onclick = () => { sh.close(); actions.docOf({ k: 'exp', id: String(e.id) }); };
-  const f = sh.q('#ef'); f.onsubmit = async ev => { ev.preventDefault(); const date = readDate(f, 'date'), amount = Core.parseMoney(f.amount.value); if (!date) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); const d = { title: f.title.value, amount, date, acct: +f.acct.value, category: f.cat.value }; if (!e && !gate()) return; if (!(await cashGuard(d.acct, amount - (e && e.acct === d.acct ? e.amount : 0), date))) return; if (await done(e ? Core.editExpense(S, e.id, d) : Core.addExpense(S, d), 'ذخیره شد.')) { if (!e) bumpUsage(); sh.close(); } };
+  const f = sh.q('#ef'); const expenseDraft=Drafts.attachSheet(sh,'expense:'+(e ? 'edit:'+e.id : 'new')); f.onsubmit = async ev => { ev.preventDefault(); const date = readDate(f, 'date'), amount = Core.parseMoney(f.amount.value); if (!date) return toast('تاریخ نامعتبر است.', true); if (!amount) return toast('مبلغ را درست وارد کنید.', true); const d = { title: f.title.value, amount, date, acct: +f.acct.value, category: f.cat.value }; if (!e && !gate()) return; if (!(await cashGuard(d.acct, amount - (e && e.acct === d.acct ? e.amount : 0), date))) return; if (await done(e ? Core.editExpense(S, e.id, d) : Core.addExpense(S, d), 'ذخیره شد.')) { if (!e) bumpUsage(); expenseDraft.clear(); sh.close(); } };
   const dl = sh.q('[data-del]'); if (dl) dl.onclick = async () => { if (await confirmBox('این هزینه حذف شود؟', 'حذف', true)) { sh.close(); await done(Core.deleteExpense(S, e.id), 'حذف شد.'); } };
 }
 
@@ -913,8 +841,31 @@ const actions = {
   shareStmt: d => shareText(Core.statementText(S, +d.p, UI.stmtFrom, UI.stmtTo)),
   csvStmt: async d => { const L = Core.ledger(S, +d.p, UI.stmtFrom, UI.stmtTo); await exportFile('statement-' + stamp() + '.csv', csvFile([['تاریخ', 'شرح', 'اضافه (' + UNIT() + ')', 'کم (' + UNIT() + ')', 'مانده (' + UNIT() + ')']].concat(L.rows.map(r => [Core.isoToJalali(r.tx.date), r.tx.desc, r.debit ? Core.shown(r.debit) : '', r.credit ? Core.shown(r.credit) : '', Core.shown(r.balance)]))), 'text/csv'); },
   newInv: d => { if (!gate()) return; const q = d.p ? '?p=' + d.p : ''; const h = '#/new/' + (d.t || 'sale') + q; goHash(h); },
-  pickInvPerson: () => pickList('انتخاب شخص', personItems(), v => { $('#nf [name=pid]').value = v; $('#nf-p').textContent = personName(+v); $('#nf-px').hidden = false; }, { addNew: 'شخص جدید', onAdd: () => personFormInline() }),
-  clrInvPerson: () => { $('#nf [name=pid]').value = ''; $('#nf-p').textContent = 'انتخاب شخص…'; $('#nf-px').hidden = true; },
+  invStockPause: () => { const f=$('#nf'); if(f) Drafts.saved(f); goHash('#/products'); },
+  discardDraft: async d => { const k=String(d.k||''); if(!Drafts.get(k))return; if(!(await confirmBox('پیش‌نویس ثبت‌نشده حذف شود؟ این کار هیچ سند قطعی یا موجودی انبار را تغییر نمی‌دهد.','حذف پیش‌نویس',true)))return; Drafts.discard(k); render(); toast('پیش‌نویس حذف شد.'); },
+  invDraftDiscard: async () => { const f=$('#nf'); if(!f)return; if (!(await confirmBox('تمام اطلاعات واردشده در فاکتور نیمه‌تمام حذف شود؟ این کار فقط پیش‌نویس را پاک می‌کند، نه فاکتورهای ثبت‌شده را.', 'حذف پیش‌نویس', true)))return;
+    const key=invoiceDraftKey(f.type.value, f.dataset.edit ? {id:+f.dataset.edit}:null); Drafts.clear(f); Drafts.discard(key); render(); toast('پیش‌نویس حذف شد.'); },
+  resumeDraft: d => {
+    const k=String(d.k||''), data=Drafts.get(k); if(!data)return toast('این پیش‌نویس دیگر موجود نیست.',true);
+    if(k.startsWith('invoice:edit:')){const id=+k.split(':').pop();if(!can('edit')||!Core.byId(S.invoices,id)) return toast('ویرایش فاکتور مجاز نیست.',true); return goHash('#/edit/'+id);}
+    if(k.startsWith('invoice:')){const t=k.slice(8);if(!Core.TYPE_FA[t])return;if((t==='purchase'||t==='purchase_return')&&!can('purchase'))return;return goHash('#/new/'+t);}
+    if(k==='person:new'){if(can('people'))return personForm(); return;}
+    if(k==='product:new'){if(can('warehouse'))return productForm(); return;}
+    if(k==='product:invoice:new'){if(can('warehouse'))return productForm(null,{inInvoice:true});return;}
+    if(k==='account:bank:new'||k==='account:cash:new'){if(can('money'))return accountForm(null,k.slice(8,12)==='bank'?'bank':'cash');return;}
+    if(k==='voucher:new'){if(routeAllowed('vouchers'))return voucherForm(null);return;}
+    if(k==='warehouse-transfer:new'){if(can('warehouse'))return whTxForm(null);return;}
+    if(k==='warehouse:new'){if(can('warehouse'))return warehouseForm(null);return;}
+    if(!can('money'))return toast('دسترسی این عملیات مجاز نیست.',true);
+    if(k==='transfer:new')return transferForm();
+    if(k==='bank-transfer:new')return acctTransferForm(null);
+    if(k==='cheque:new')return chequeForm(null);
+    if(k==='cheque:legacy:new')return legacyChequeForm(null);
+    if(k==='expense:new')return expenseForm();
+    if(k.startsWith('tx:')&&k.endsWith(':new'))return txForm(k.split(':')[1]);
+  },
+  pickInvPerson: () => pickList('انتخاب شخص', personItems(), v => { $('#nf [name=pid]').value = v; $('#nf-p').textContent = personName(+v); $('#nf-px').hidden = false; Drafts.touch($('#nf')); }, { addNew: 'شخص جدید', onAdd: () => personFormInline() }),
+  clrInvPerson: () => { $('#nf [name=pid]').value = ''; $('#nf-p').textContent = 'انتخاب شخص…'; $('#nf-px').hidden = true; Drafts.touch($('#nf')); },
   pickSerial: (d, el) => serialPicker(el.closest('.it-row')),
   pickProd: (d, el) => {
     const f = $('#nf'), type = f.type.value, row = el.closest('.it-row'), fill = p => fillRowProduct(row, p);
@@ -947,8 +898,8 @@ const actions = {
   errSeen: () => { try { localStorage.setItem('fq_err_seen', String(diagLoad().length)); } catch (e) { /* ignore */ } render(); },
   reportClear: async () => { if (await confirmBox('خطاهای ثبت‌شده پاک شود؟', 'پاک کن')) { diagClear(); try { localStorage.setItem('fq_err_seen', '0'); } catch (e) { /* ignore */ } render(); } },
   printInv: d => printInvoice(+d.id),
-  addRow: () => { addRow(); calcInvoice(); }, rmRow: (d, el) => { const only = $$('.it-row').length <= 1; el.closest('.it-row').remove(); if (only) addRow(); calcInvoice(); }, // the only row is emptied instead of staying stuck
-  payFull: () => { const f = $('#nf'); f.paid.value = Core.fmtInput((+f.dataset.total || 0)); calcInvoice(); },
+  addRow: () => { addRow(); calcInvoice(); Drafts.touch($('#nf')); }, rmRow: (d, el) => { const only = $$('.it-row').length <= 1; el.closest('.it-row').remove(); if (only) addRow(); calcInvoice(); Drafts.touch($('#nf')); }, // the only row is emptied instead of staying stuck
+  payFull: () => { const f = $('#nf'); f.paid.value = Core.fmtInput((+f.dataset.total || 0)); calcInvoice(); Drafts.touch(f); },
   payInv: d => { const i = Core.byId(S.invoices, +d.id), info = Core.invoiceInfo(S, i); const isRec = i.type === 'sale' || i.type === 'purchase_return'; txForm(isRec ? 'receipt' : 'payment', i.personId, null, { ref: i.id }); setTimeout(() => { const f = $('#tf'); f.amount.value = Core.fmtInput((info.remaining)); mwUpdate(f.amount); f.desc.value = 'تسویه فاکتور ' + fa(i.no); }, 30); },
   shareInv: d => shareText(invoiceText(Core.byId(S.invoices, +d.id))),
   delInv: async d => { const i = Core.byId(S.invoices, +d.id); if (await confirmBox('فاکتور ' + fa(i.no) + ' و همه پرداخت‌های ثبت‌شده‌اش حذف شود؟ اثر آن روی حساب و انبار برگردانده می‌شود.', 'حذف فاکتور', true)) { const r = Core.deleteInvoice(S, i.id); if (r.ok) { await save(); toast('حذف شد.'); goHash('#/invoices'); } else toast(r.error, true); } },
@@ -981,7 +932,7 @@ const actions = {
 };
 function personFormInline() { // quick-add from invoice picker
   const sh = sheet('شخص جدید', '<form id="pq"><label class="fld"><span>نام</span><input class="inp" name="name" autocomplete="off"></label><label class="fld"><span>تلفن</span><input class="inp ltr" name="phone" inputmode="tel"></label><button class="btn blue" type="submit">ذخیره و انتخاب</button></form>');
-  sh.q('#pq').onsubmit = async e => { e.preventDefault(); const f = e.target; const r = Core.addPerson(S, { name: f.name.value, phone: f.phone.value }); if (!r.ok) return toast(r.error, true); await save(); sh.close(); $('#nf [name=pid]').value = r.person.id; $('#nf-p').textContent = r.person.name; if ($('#nf-px')) $('#nf-px').hidden = false; };
+  sh.q('#pq').onsubmit = async e => { e.preventDefault(); const f = e.target; const r = Core.addPerson(S, { name: f.name.value, phone: f.phone.value }); if (!r.ok) return toast(r.error, true); await save(); sh.close(); $('#nf [name=pid]').value = r.person.id; $('#nf-p').textContent = r.person.name; if ($('#nf-px')) $('#nf-px').hidden = false; Drafts.touch($('#nf')); };
   autoFocus(() => sh.q('[name=name]'));
 }
 
@@ -1007,6 +958,8 @@ function softSwap(main, html, id) {
   return true;
 }
 function render(opt) {
+  // Persist before computing the destination screen so Home/Stock shortcuts see the draft immediately.
+  if (!(opt && opt.keepId)) Drafts.flushPage();
   const hash = (location.hash || '#/home').split('?')[0]; const [, page, arg] = hash.split('/'); const fn = routes[page] || routes.home;
   let res; try { res = routeAllowed(page) ? fn(arg) : { title: 'دسترسی محدود', html: empty(ico('lock'), 'برای دیدن این بخش اجازه ندارید. از مدیر برنامه بخواهید.', backTo('#/home')), back: '#/home' }; } catch (e) { console.error(e); diagLog('render', e.message, e.stack, hash); res = { title: 'خطا', html: '<div class="card"><b class="debit">خطای برنامه</b><p class="hint">' + esc(e.message) + '</p><p class="hint">لطفاً گزارش خطا را بفرستید تا برطرف شود. اطلاعات شما سالم است.</p><button class="btn green" data-act="reportWa">ارسال گزارش در واتساپ</button><button class="btn blue" data-act="go" data-h="#/home">بازگشت به خانه</button></div>' }; }
   const main = $('#main'), keep = main.scrollTop, same = lastRoute === hash; if (!(opt && opt.keepId && softSwap(main, res.html, opt.keepId))) main.innerHTML = res.html; main.scrollTop = same ? keep : 0; lastRoute = hash; lastFull = location.hash || '#/home';
@@ -1213,7 +1166,7 @@ function fillRowProduct(row, p) {
   $('.stk', row).classList.toggle('debit', have <= 0);
   if (have <= 0 && (type === 'sale' || type === 'purchase_return')) toast('«' + p.name + '» موجودی ندارد؛ فاکتور بدون موجودی ثبت نمی‌شود.', true);
   const n = syncSerialBtn(row);
-  calcInvoice();
+  calcInvoice(); Drafts.touch(f);
   if (n && !$('[name=sn]', row).value.trim() && Core.serialRequired(S, p)) setTimeout(() => serialPicker(row), 120); // phones: choose the device right away
 }
 // «انتخاب از موجودی»: the serials of this product that are in stock, for sales and returns to the supplier
@@ -1240,13 +1193,13 @@ function serialPicker(row) {
     const sn = $('[name=sn]', row), other = sn.value.replace(/[A-Za-z0-9۰-۹]{6,20}/g, t => (Core.extractSerials(t).length ? '' : t)).replace(/\s+/g, ' ').trim(); // keep any words that are not serials
     sn.value = (pick.join(' ') + (other ? ' ' + other : '')).trim();
     if (pick.length) $('[name=qty]', row).value = fa(pick.length);
-    calcInvoice(); syncSerialBtn(row);
+    calcInvoice(); syncSerialBtn(row); Drafts.touch($('#nf'));
   };
 }
 function putProductInRow(p) {
   const rows = $$('.it-row');
   const same = rows.find(r => +r.dataset.pid === p.id && !$('[name=sn]', r).value.trim());
-  if (same) { const q = $('[name=qty]', same); q.value = fa(Core.toEn(q.value) * 1 + 1 || 1); calcInvoice(); return; }
+  if (same) { const q = $('[name=qty]', same); q.value = fa(Core.toEn(q.value) * 1 + 1 || 1); calcInvoice(); Drafts.touch($('#nf')); return; }
   let row = rows.find(r => !r.dataset.pid); if (!row) { addRow(); const all = $$('.it-row'); row = all[all.length - 1]; }
   fillRowProduct(row, p);
 }

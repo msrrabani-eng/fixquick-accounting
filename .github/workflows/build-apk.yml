@@ -24,18 +24,14 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Unit tests (accounting engine and smart receipt integration)
+      - name: Unit tests (accounting engine and safe draft recovery)
         run: |
           node tests/core.test.js
           node tests/vol002.test.js
           node tests/vol003.test.js
           node tests/vol004.test.js
-          node tests/vol005.test.js
-          node tests/vol006.test.js
-          node tests/vol007.test.js
-          node tests/vol008.test.js
-          node tests/vol009.test.js
-          node tests/vol010.test.js
+          node tests/vol011.test.js
+          node tests/vol012.test.js
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |
@@ -43,14 +39,8 @@ jobs:
           if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
           npm ls --depth=0 || true
 
-      - name: Bundle offline Persian and English OCR
-        run: bash tools/prepare_ocr.sh
-
       - name: Create Android project
         run: npx cap add android
-
-      - name: Install native fast OCR bridge (on-device ML Kit)
-        run: python3 tools/install_native_ocr.py
 
       - name: Permissions (camera for QR scanning, fingerprint, saving backups to Documents)
         run: |
