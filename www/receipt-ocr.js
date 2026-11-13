@@ -1,4 +1,4 @@
-/* Fix Quick v006 — local-only OCR of camera/gallery receipt images.
+/* Fix Quick v007 — local-only OCR of camera/gallery receipt images.
  * No uploads, no storage and no automatic accounting writes.
  * The OCR runtime and Persian+English language data are bundled in the APK.
  */
@@ -19,7 +19,7 @@
         picture.src = url;
       });
       if (!img.naturalWidth || !img.naturalHeight) throw Error('ابعاد تصویر نامعتبر است.');
-      const maxDimension = 2400;
+      const maxDimension = 1400; // lower pixel count reduces offline recognition latency
       const scale = Math.min(1, maxDimension / Math.max(img.naturalWidth, img.naturalHeight));
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
@@ -30,30 +30,61 @@
       return await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(Error('آماده‌سازی عکس ناموفق بود.')), 'image/jpeg', 0.92));
     } finally { URL.revokeObjectURL(url); }
   }
+  // Keep the expensive offline language initialization cached for the session.
+  // A cold start can take longer than two seconds on real devices.
+  let workerPromise = null;
+  let queue = Promise.resolve();
+  let prepared = false;
+  const CONFIG = () => ({
+    workerPath: new URL('ocr/worker.min.js', location.href).href,
+    corePath: new URL('ocr/core', location.href).href,
+    langPath: new URL('ocr/lang', location.href).href
+  });
+  function warmup() {
+    if (!root.Tesseract || typeof root.Tesseract.createWorker !== 'function') {
+      return Promise.reject(Error('موتور OCR در این نسخه نصب نشده است.'));
+    }
+    if (!workerPromise) {
+      workerPromise = root.Tesseract.createWorker(['fas', 'eng'], 1, CONFIG())
+        .then(worker => { prepared = true; return worker; })
+        .catch(err => { workerPromise = null; prepared = false; throw err; });
+    }
+    return workerPromise;
+  }
+  function isReady() { return prepared; }
   async function recognize(file, onProgress) {
     validateFile(file);
-    if (!root.Tesseract || typeof root.Tesseract.createWorker !== 'function') {
-      throw Error('موتور خواندن عکس در این نسخه APK موجود نیست؛ می‌توانید متن فیش را دستی وارد کنید.');
-    }
-    const blob = await resize(file);
-    const imgUrl = URL.createObjectURL(blob);
-    let worker;
-    try {
-      worker = await root.Tesseract.createWorker(['fas', 'eng'], 1, {
-        workerPath: new URL('ocr/worker.min.js', location.href).href,
-        corePath: new URL('ocr/core', location.href).href,
-        langPath: new URL('ocr/lang', location.href).href,
-        logger: m => { if (onProgress && m && m.status) onProgress(m.status, m.progress || 0); }
-      });
-      const data = await worker.recognize(imgUrl);
-      const text = String(data && data.data && data.data.text || '').trim();
-      if (!text) throw Error('متنی در تصویر تشخیص داده نشد؛ عکس واضح‌تری بگیرید یا متن فیش را دستی وارد کنید.');
-      return { text, confidence: Number(data.data.confidence) || 0 };
-    } finally {
-      URL.revokeObjectURL(imgUrl);
-      if (worker) await worker.terminate();
-    }
+    // OCR work is serialized to avoid races on the shared worker.
+    const action = async () => {
+      if (onProgress) onProgress('آماده‌سازی تصویر', 0);
+      const blob = await resize(file);
+      const imgUrl = URL.createObjectURL(blob);
+      try {
+        if (onProgress) onProgress('بارگذاری موتور آفلاین فارسی و انگلیسی', 0);
+        const worker = await warmup();
+        if (onProgress) onProgress('خواندن متن عکس', 0);
+        const result = await worker.recognize(imgUrl);
+        const text = String(result && result.data && result.data.text || '').trim();
+        if (!text) throw Error('متنی شناسایی نشد؛ تصویر روشن‌تر یا متن دستی را امتحان کنید.');
+        return { text, confidence: Number(result.data.confidence) || 0 };
+      } finally { URL.revokeObjectURL(imgUrl); }
+    };
+    const task = queue.then(action, action);
+    queue = task.catch(() => {});
+    return task;
   }
-  root.ReceiptOCR = { recognize, validateFile, MAX_IMAGE_BYTES };
+  // Start background preparation without blocking navigation or forms.
+  function prewarm() {
+    return warmup().catch(() => null);
+  }
+  // Some Android WebViews do not free worker memory unless explicitly asked.
+  async function dispose() {
+    if (!workerPromise) return;
+    const p = workerPromise;
+    workerPromise = null;
+    prepared = false;
+    try { const w = await p; await w.terminate(); } catch (_) {}
+  }
+  root.ReceiptOCR = { recognize, prewarm, warmup, isReady, dispose, validateFile, MAX_IMAGE_BYTES };
   if (typeof module !== 'undefined' && module.exports) module.exports = { validateFile, MAX_IMAGE_BYTES };
 })(typeof window !== 'undefined' ? window : globalThis);

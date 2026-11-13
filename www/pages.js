@@ -246,24 +246,48 @@ function txForm(type, personId, tx, pre) {
       };
     };
     sh.q('#tf-ocr-analyze').onclick = () => analyzeText(rawText.value);
+    // Warm the OCR engine before the user selects a photo. Non-blocking.
+    ReceiptOCR.prewarm();
+    let photoRun = 0;
     const processPhoto = async input => {
       const file = input.files && input.files[0]; input.value = ''; if (!file) return;
+      const runId = ++photoRun;
+      rawText.dataset.userEdited = '0';
       review.hidden = true; verifiedReceipt = null;
+      let slowTimer;
       try {
-        setStatus('در حال خواندن عکس روی گوشی…');
-        const result = await ReceiptOCR.recognize(file, (msg, progress) => { setStatus('در حال شناسایی متن فیش… ' + fa(Math.round(progress * 100)) + '٪'); });
-        if (!sh.el.isConnected) return; // the sheet was closed during recognition
+        setStatus('در حال آماده‌سازی و خواندن عکس…');
+        // Never leave the user staring at a frozen 0%. If the two-second
+        // target is exceeded, expose the manual path while OCR continues.
+        slowTimer = setTimeout(() => {
+          if (runId !== photoRun || !sh.el.isConnected) return;
+          setStatus('پردازش بیشتر از ۲ ثانیه طول کشید. می‌توانید هم‌زمان متن را دستی وارد کنید؛ نتیجه عکس پس از آماده‌شدن نمایش داده می‌شود.');
+        }, 2000);
+        const result = await ReceiptOCR.recognize(file, (msg, progress) => {
+          if (runId !== photoRun || !sh.el.isConnected) return;
+          // Initialization is not progress; 0% during model loading is misleading.
+          if (msg === 'خواندن متن عکس' && progress > 0) setStatus('در حال خواندن متن فیش… ' + fa(Math.round(progress * 100)) + '٪');
+          else if (msg !== 'خواندن متن عکس') setStatus(msg + '…');
+        });
+        if (runId !== photoRun || !sh.el.isConnected) return;
+        if (rawText.dataset.userEdited === '1') {
+          setStatus('متن فیش را دستی ویرایش کرده‌اید؛ نتیجه OCR برای جلوگیری از جایگزینی تغییرات شما اعمال نشد.');
+          return;
+        }
         rawText.value = result.text;
         setStatus('خواندن عکس انجام شد. لطفاً اطلاعات را بررسی و تأیید کنید.');
         analyzeText(result.text);
-      } catch (err) { setStatus('خواندن عکس انجام نشد: ' + (err.message || String(err)) + ' متن فیش را می‌توانید دستی وارد کنید.'); }
+      } catch (err) {
+        if (runId === photoRun && sh.el.isConnected)
+          setStatus('خواندن عکس انجام نشد: ' + (err.message || String(err)) + '؛ متن فیش را دستی وارد کنید.');
+      } finally { clearTimeout(slowTimer); }
     };
     const camera = sh.q('#tf-camera-file'), gallery = sh.q('#tf-gallery-file');
     sh.q('#tf-camera').onclick = () => camera.click();
     sh.q('#tf-gallery').onclick = () => gallery.click();
     camera.onchange = () => processPhoto(camera);
     gallery.onchange = () => processPhoto(gallery);
-    rawText.oninput = () => { verifiedReceipt = null; review.hidden = true; setStatus('متن فیش تغییر کرد؛ دوباره «بررسی متن فیش» را بزنید.'); };
+    rawText.oninput = () => { rawText.dataset.userEdited = '1'; verifiedReceipt = null; review.hidden = true; setStatus('متن فیش تغییر کرد؛ دوباره «بررسی متن فیش» را بزنید.'); };
   }
   f.onsubmit = async e => {
     e.preventDefault(); const amount = Core.parseMoney(f.amount.value), date = readDate(f, 'date');
