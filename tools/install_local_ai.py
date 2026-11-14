@@ -14,6 +14,16 @@ up=cpp/'llama.cpp'
 if not up.exists():
     subprocess.run(['git','clone','--depth','1','--branch','b6500','https://github.com/ggml-org/llama.cpp.git',str(up)],check=True)
 assert subprocess.check_output(['git','-C',str(up),'rev-parse','HEAD'],text=True).strip()==commit,'Unexpected llama.cpp revision'
+# Android API 22 lacks posix_madvise and its constants (introduced in API 23).
+# The two calls are optional prefetch hints; madvise is available on API 22.
+# Scope the compatibility aliases to this pinned upstream translation unit.
+mmap_source=up/'src/llama-mmap.cpp'
+s=mmap_source.read_text()
+marker='// llama_mmap\n'
+compat='// Fix Quick: Android API 22 memory-advice compatibility.\n#if defined(__ANDROID__) && __ANDROID_API__ < 23\n#ifndef POSIX_MADV_WILLNEED\n#define POSIX_MADV_WILLNEED MADV_WILLNEED\n#endif\n#ifndef POSIX_MADV_RANDOM\n#define POSIX_MADV_RANDOM MADV_RANDOM\n#endif\n#define posix_madvise madvise\n#endif\n\n'
+if compat not in s:
+    assert s.count(marker)==1 and s.count('if (posix_madvise(')==2, 'Unexpected upstream mmap implementation'
+    mmap_source.write_text(s.replace(marker,compat+marker,1))
 (APP/'src/main/assets').mkdir(parents=True,exist_ok=True)
 shutil.copy2(up/'LICENSE',APP/'src/main/assets/llama-cpp-LICENSE.txt')
 activity=java/'MainActivity.java'; s=activity.read_text()

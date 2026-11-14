@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'fixq-build-validation-*']
   workflow_dispatch:
 
 permissions:
@@ -144,6 +144,7 @@ jobs:
           path: FixQuick-Accounting.apk
 
       - name: Keep the exact versions for every later build
+        if: github.ref == 'refs/heads/main'
         run: |
           if [ -n "$(git status --porcelain package-lock.json)" ]; then
             git config user.name "github-actions[bot]"; git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
@@ -152,6 +153,7 @@ jobs:
           else echo "package-lock.json unchanged"; fi
 
       - name: Publish this version (kept for good) and update "latest"
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
