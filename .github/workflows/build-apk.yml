@@ -46,6 +46,7 @@ jobs:
           node tests/vol023.test.js
           node tests/vol024.test.js
           node tests/vol025.test.js
+          node tests/vol026.test.js
           javac -d /tmp/fq-ai-policy native-ai/AiMemoryPolicy.java tests/AiMemoryPolicyTest.java
           java -cp /tmp/fq-ai-policy ir.fixquick.accounting.AiMemoryPolicyTest
 

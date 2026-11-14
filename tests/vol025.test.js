@@ -18,8 +18,8 @@ const h={valid:()=>true,today:()=>today,permissions:()=>allow,generate:async(p)=
 async function run(q,...r){responses=r;calls=[];reads=0;return O.run(q,[],{},h);}
 (async()=>{
  let r=await run(greeting,{kind:'answer',text:'سلام!'});assert.equal(r.text,'سلام!');assert.equal(reads,0);assert.equal(calls.length,1);
- r=await run(question,plan);assert.equal(r.data.kind,'tool-result');assert.equal(calls.length,1);assert.equal(reads,1);assert.match(r.text,/۸۰۰/);
- r=await run(question,{kind:'read',requests:[{...request,period:'yesterday'}]},plan,{kind:'answer',text:'گزارش را بررسی کنید.'});assert.equal(calls.length,3);assert.equal(reads,1);
+ r=await run(question,plan);assert.equal(r.data.kind,'tool-result');assert.equal(calls.length,0);assert.equal(reads,1);assert.match(r.text,/۸۰۰/);
+ r=await run(question,{kind:'read',requests:[{...request,period:'yesterday'}]},plan,{kind:'answer',text:'گزارش را بررسی کنید.'});assert.equal(calls.length,0);assert.equal(reads,1);
  allow={};r=await run(question,plan);assert.equal(r.data.kind,'denied');assert.equal(reads,0);
- console.log('v025: compact genuine model prompts, verified short totals, full fallback, permission enforcement passed (mock native output)');
+ console.log('v025: compact genuine model prompts and direct verified short totals, permission enforcement passed (mock native output)');
 })().catch(e=>{console.error(e);process.exitCode=1;});
