@@ -71,7 +71,8 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_ir_fixquick_accounting_LocalAIPlugi
         std::vector<llama_token> tokens(n); if(llama_tokenize(vocab,prompt.data(),prompt.size(),tokens.data(),n,false,true)!=n)throw std::runtime_error("Tokenization failed");
         std::unique_ptr<llama_sampler,decltype(&llama_sampler_free)> sampler(llama_sampler_init_greedy(),llama_sampler_free);
         stage(4,n);
-        for(int i=0;i<n;i+=128){check_stop();const int count=std::min(128,n-i);const int rc=llama_decode(ctx.get(),llama_batch_get_one(tokens.data()+i,count));check_stop();if(rc)throw std::runtime_error("Prompt evaluation interrupted");processed=i+count;}
+        // Publish completed microbatches instead of waiting for two microbatches.
+        for(int i=0;i<n;i+=64){check_stop();const int count=std::min(64,n-i);const int rc=llama_decode(ctx.get(),llama_batch_get_one(tokens.data()+i,count));check_stop();if(rc)throw std::runtime_error("Prompt evaluation interrupted");processed=i+count;}
         stage(5,limit);
         std::string out;
         for(int i=0;i<limit;i++){
