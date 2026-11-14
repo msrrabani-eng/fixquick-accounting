@@ -55,14 +55,12 @@ async function aiReadStatus(){
 }
 function aiReady(){return aiStatus?.status==='ready'&&aiStatus.runtime===true&&aiStatus.compatible===true;}
 function aiChatAllowed(){return aiReady()&&aiEnabled()&&aiChatOwner!==null&&aiChatOwner===smartCurrentUser()&&!!FQAI.plugin();}
+function aiReportChatAllowed(){return aiChatOwner!==null&&aiChatOwner===smartCurrentUser();}
 async function aiLaunch(){
  if(aiLaunching||aiSheet)return;
- const owner=smartCurrentUser(),origin=location.hash;aiLaunching=true;
- try{await aiReadStatus();if(owner!==smartCurrentUser()||origin!==location.hash)return;
-  if(aiReady()) {aiSetEnabled(true);aiChatOwner=owner;goHash('#/assistant');}
-  else {aiChatOwner=null;aiOpenAddon();}
- }finally{aiLaunching=false;}
+ const owner=smartCurrentUser();aiChatOwner=owner;goHash('#/assistant');
 }
+
 function aiLockChat(){aiChatOwner=null;aiCancel();if(location.hash.split('?')[0]==='#/assistant')render();}
 
 function aiEnabled(){try{return localStorage.getItem('fq_ai_optin')==='yes';}catch(_){return false;}}
@@ -98,15 +96,15 @@ function aiOpenAddon(){if(aiSheet)return;let last=null,rate=null,closed=false,ru
  try{const r=await FQAI.plugin().generate({prompt:FQOrchestrator.diagnosticPrompt(),maxTokens:32,diagnostic:true});if(closed||!label.isConnected||owner!==smartCurrentUser())return;const passed=FQOrchestrator.checkDiagnostic(r.text);label.textContent=passed?'آزمون ساده تولید متن موفق بود ('+fa(Math.round((Date.now()-started)/1000))+' ثانیه). این آزمون به معنی تضمین همه تحلیل‌های مالی نیست.':'مدل اجرا شد اما پاسخ مورد انتظار را تولید نکرد. اجرای درست دستیار هنوز تأیید نشده است.';}
  catch(e){if(!closed&&label.isConnected&&owner===smartCurrentUser())label.textContent='آزمون ناموفق: '+aiError(e);}
  finally{testing=false;await refresh();}};
- q('#ai-remove').onclick=async()=>{if(!await confirmBox('فقط فایل مدل یا دانلود جاری حذف شود؟ اطلاعات حسابداری محفوظ می‌ماند.','حذف افزونه',true))return;try{await FQAI.plugin().removeModel();aiSetEnabled(false);aiLockChat();await refresh();}catch(e){toast(aiError(e),true);}};
+ q('#ai-remove').onclick=async()=>{if(!await confirmBox('فقط فایل مدل یا دانلود جاری حذف شود؟ اطلاعات حسابداری محفوظ می‌ماند.','حذف افزونه',true))return;try{await FQAI.plugin().removeModel();aiSetEnabled(false);if(location.hash.split('?')[0]==='#/assistant')render();await refresh();}catch(e){toast(aiError(e),true);}};
  refresh();clearInterval(aiPoll);aiPoll=setInterval(()=>{if(!sh.el.isConnected){closed=true;clearInterval(aiPoll);aiSheet=null;return;}refresh();},1200);
 }
 // Poll native progress independently of the installation/authorization state.
 let aiProgressTimer=null;
 function aiWatchProgress(job){clearInterval(aiProgressTimer);let pending=false;const tick=async()=>{if(job!==aiJob||!aiBusy){clearInterval(timer);if(aiProgressTimer===timer)aiProgressTimer=null;return;}if(pending)return;pending=true;try{const s=await FQAI.plugin().status();if(job===aiJob&&aiBusy){const label=document.querySelector('#fq-ai-progress');if(label)label.textContent=FQAI.progressText(s);}}catch(_){}finally{pending=false;}};const timer=setInterval(tick,1200);aiProgressTimer=timer;tick();}
-async function aiVoiceInput(){if(aiListening||aiBusy)return;const user=smartCurrentUser(),job=aiJob;const s=await aiReadStatus();if(user!==smartCurrentUser()||job!==aiJob||location.hash.split('?')[0]!=='#/assistant')return;if(!aiChatAllowed()){aiLockChat();return;}if(!s.speech){toast('گفتار فارسی آفلاین روی دستگاه تأیید نشده؛ از تایپ استفاده کنید.',true);return;}const input=$('#fq-chat-input');let btn=$('#fq-ai-mic');try{aiListening=true;if(btn){btn.disabled=true;btn.setAttribute('aria-label','در حال شنیدن');}const r=await FQAI.plugin().listen();if(user===smartCurrentUser()&&job===aiJob&&input?.isConnected){input.value=r.text||'';input.focus();}}catch(e){toast(aiError(e),true);}finally{aiListening=false;if(btn?.isConnected){btn.disabled=false;btn.setAttribute('aria-label','گفتار فارسی');}}}
-async function aiSpeakLast(){const owner=smartCurrentUser(),job=aiJob;await aiReadStatus();if(owner!==smartCurrentUser()||job!==aiJob||location.hash.split('?')[0]!=='#/assistant')return;if(!aiChatAllowed()){aiLockChat();return;}const m=smartTalk.filter(x=>x.role==='assistant').slice(-1)[0];if(!m)return;try{await FQAI.plugin().speak({text:[m.text,...(m.details||[])].join('\n')});}catch(e){toast(aiError(e),true);}}
+async function aiVoiceInput(){if(aiListening||aiBusy)return;const user=smartCurrentUser(),job=aiJob;const s=await aiReadStatus();if(user!==smartCurrentUser()||job!==aiJob||location.hash.split('?')[0]!=='#/assistant')return;if(!aiReportChatAllowed()||!FQAI.plugin()){toast('تشخیص گفتار در دسترس نیست.',true);return;}if(!s.speech){toast('گفتار فارسی آفلاین روی دستگاه تأیید نشده؛ از تایپ استفاده کنید.',true);return;}const input=$('#fq-chat-input');let btn=$('#fq-ai-mic');try{aiListening=true;if(btn){btn.disabled=true;btn.setAttribute('aria-label','در حال شنیدن');}const r=await FQAI.plugin().listen();if(user===smartCurrentUser()&&job===aiJob&&input?.isConnected){input.value=r.text||'';input.focus();}}catch(e){toast(aiError(e),true);}finally{aiListening=false;if(btn?.isConnected){btn.disabled=false;btn.setAttribute('aria-label','گفتار فارسی');}}}
+async function aiSpeakLast(){const owner=smartCurrentUser(),job=aiJob;await aiReadStatus();if(owner!==smartCurrentUser()||job!==aiJob||location.hash.split('?')[0]!=='#/assistant')return;if(!aiReportChatAllowed()||!FQAI.plugin()){toast('خواندن پاسخ در دسترس نیست.',true);return;}const m=smartTalk.filter(x=>x.role==='assistant').slice(-1)[0];if(!m)return;try{await FQAI.plugin().speak({text:[m.text,...(m.details||[])].join('\n')});}catch(e){toast(aiError(e),true);}}
 async function aiAdvanced(q,history,opts){const p=FQAI.plugin();if(!p||!aiEnabled())return null;const s=await aiReadStatus();if(s.status!=='ready'||!s.compatible)return null;const r=await p.generate({prompt:FQAI.prompt(q,history),maxTokens:512});const parsed=FQAI.parse(r.text);if(!parsed)throw new Error("پاسخ مدل قابل استفاده نبود؛ سؤال را کوتاه‌تر و دقیق‌تر بنویسید.");return parsed;}
 function aiCancel(){clearInterval(aiProgressTimer);aiProgressTimer=null;aiJob++;aiBusy=false;aiCheckingQuestion=false;const p=FQAI.plugin();if(!p)return;for(const method of ['cancel','stopListening','stopSpeaking']){try{Promise.resolve(p[method]()).catch(()=>{});}catch(_){}}}
 // Stop microphone, TTS and inference on leaving the assistant; no background private conversation.
-if(typeof window!=='undefined'){window.addEventListener('hashchange',()=>{if(location.hash.split('?')[0]!=='#/assistant'&&aiChatOwner!==null){aiChatOwner=null;aiCancel();}});if(typeof document!=='undefined')document.addEventListener('visibilitychange',async()=>{if(!document.hidden&&location.hash.split('?')[0]==='#/assistant'&&aiChatOwner!==null){await aiReadStatus();if(location.hash.split('?')[0]==='#/assistant'&&!aiChatAllowed())aiLockChat();}});}
+if(typeof window!=='undefined'){window.addEventListener('hashchange',()=>{if(location.hash.split('?')[0]!=='#/assistant'&&aiChatOwner!==null){aiChatOwner=null;aiCancel();}});if(typeof document!=='undefined')document.addEventListener('visibilitychange',async()=>{if(!document.hidden&&location.hash.split('?')[0]==='#/assistant'&&aiChatOwner!==null){await aiReadStatus();if(location.hash.split('?')[0]==='#/assistant'&&!aiReportChatAllowed())aiLockChat();}});}
