@@ -11,7 +11,7 @@ function pageSmartAssistant() {
   const h='<section class="ui20-chat"><div class="ui20-scroll"><div class="ui2-chat-head"><div class="ch">'+ico('chat')+'دستیار حسابداری</div><button type="button" class="lnk" id="fq-chat-reset">'+ico('plus')+'گفت‌وگوی جدید</button></div>'+
     '<div class="ui2-ai-tools"><button type="button" class="chip" id="fq-ai-addon">'+ico('settings')+'مدیریت افزونه</button><span id="fq-ai-tag" class="hint">مدل محلی نصب شده</span><button type="button" class="chip" id="fq-ai-speak">خواندن پاسخ</button></div>'+
     '<details class="ui2-chat-intro"><summary>راهنمای دستیار · آفلاین</summary><p class="hint">Qwen ابتدا سؤال را تحلیل می‌کند؛ در صورت نیاز گزارش خواندنی برنامه را می‌خواند. مبالغ معتبر از موتور حسابداری می‌آیند. هیچ سندی ثبت و هیچ اطلاعاتی ارسال نمی‌شود.</p></details>'+
-    '<div id="fq-chat-history" class="fq-chat-history" aria-live="polite">'+history+(aiBusy?'<div class="fq-msg fq-bot">در حال تحلیل محلی… <button type="button" id="fq-ai-cancel" class="lnk">توقف</button></div>':'')+'</div>'+
+    '<div id="fq-chat-history" class="fq-chat-history" aria-live="polite">'+history+(aiBusy?'<div class="fq-msg fq-bot"><span id="fq-ai-progress">در حال تحلیل محلی…</span> <button type="button" id="fq-ai-cancel" class="lnk">توقف</button></div>':'')+'</div>'+
     (smartTalk.length?'':'<details class="ui20-examples"><summary>نمونه سؤال‌ها</summary><div class="chips wrap ui2-chat-examples">'+examples.map(x=>'<button type="button" class="chip" data-act="fqChatExample" data-q="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div></details>')+'</div>'+
     '<form id="fq-chat-form" class="card ui2-chat-compose"><textarea id="fq-chat-input" class="inp" rows="1" maxlength="1800" aria-label="سؤال جدید" placeholder="سؤال خود را بنویسید…" required></textarea><button class="btn ghost" type="button" id="fq-ai-mic" aria-label="گفتار فارسی">'+ico('mic')+'</button><button class="btn blue" type="submit" aria-label="ارسال سؤال"'+(aiBusy?' disabled':'')+'>'+ico('send')+'</button></form></section>';
   return {title:'دستیار گفت‌وگویی',html:h,back:'#/home',mount:()=>{
@@ -27,7 +27,8 @@ async function smartAskQuestion(text){
   smartResetForUser();const q=String(text||'').trim();if(!q||aiBusy||aiListening||aiCheckingQuestion||location.hash.split('?')[0]!=='#/assistant')return;
   if(!aiChatAllowed()){aiLockChat();return;}
   const authOwner=smartCurrentUser(),authJob=aiJob;aiCheckingQuestion=true;
-  try{await aiReadStatus();}finally{aiCheckingQuestion=false;}
+  let current;try{current=await aiReadStatus();}finally{aiCheckingQuestion=false;}
+  if(current?.busy){toast('موتور هنوز مشغول آزاد کردن تحلیل قبلی است؛ پس از توقف کامل دوباره تلاش کنید.',true);return;}
   if(authOwner!==smartCurrentUser()||authJob!==aiJob||location.hash.split('?')[0]!=='#/assistant')return;
   if(!aiChatAllowed()){aiLockChat();return;}
 
@@ -35,7 +36,7 @@ async function smartAskQuestion(text){
   const opts=()=>({today:today(),allow:permissions()});
   const history=smartTalk.slice(-8),context=smartContext,owner=smartCurrentUser(),job=++aiJob;
   const auth=JSON.stringify(permissions()),valid=()=>job===aiJob&&owner===smartCurrentUser()&&location.hash.split('?')[0]==='#/assistant'&&aiChatAllowed()&&JSON.stringify(permissions())===auth;
-  smartTalk.push({role:'user',text:q});aiBusy=true;render();let out;
+  smartTalk.push({role:'user',text:q});aiBusy=true;render();aiWatchProgress(job);let out;
   try{out=await FQOrchestrator.run(q,history,context,{
     valid,permissions,today,
     generate:async(prompt,maxTokens)=>{if(!valid())throw Error('دسترسی تغییر کرده است');const p=FQAI.plugin();const r=await p.generate({prompt,maxTokens});if(!valid())throw Error('تحلیل متوقف شد');return r.text;},

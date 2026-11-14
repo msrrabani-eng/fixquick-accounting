@@ -1,0 +1,16 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const A=require('../www/ai-addon.js');const read=p=>fs.readFileSync(p,'utf8');
+assert.match(A.progressText({phase:2,phaseTotal:100,processed:47,elapsedMs:10000}),/۴۷٪.*۱۰ ثانیه/);
+assert.match(A.progressText({phase:4,phaseTotal:256,processed:128,elapsedMs:12000}),/۱۲۸ از ۲۵۶/);
+assert.match(A.progressText({phase:5,outputTokens:9,elapsedMs:33000}),/۹ توکن تولید شد/);
+assert.match(A.progressText({phase:5,deadlineReached:true}),/درخواست توقف/);
+assert.match(A.progressText({}),/انتظار/);
+const java=read('native-ai/LocalAIPlugin.java'),cpp=read('native-ai/bridge.cpp');
+assert.ok(read('native-ai/CMakeLists.txt').includes('-O3'));
+for(const k of ['nativeProgress','nativeReleaseModel','15000','180000','360000','addProgress(out)','main.removeCallbacks(idleRelease)'])assert.ok(java.includes(k),k);
+for(const k of ['cached_model','complete_json(out)','stage(4,n)','stage(5,limit)','stage(2,100)','timed_out()','nativeProgress','release_model();deadline=0'])assert.ok(cpp.includes(k),k);
+assert.ok(read('www/smart-ui.js').includes('aiWatchProgress(job)'));
+assert.ok(read('www/ai-addon.js').includes('diagnostic:true'));
+assert.ok(read('www/ai-addon.js').includes('ai-test-stop'));
+console.log('v024: progress presentation, bounded diagnostic, cancel/reuse and optimized native configuration wiring (no real inference) passed');

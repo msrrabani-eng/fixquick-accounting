@@ -51,10 +51,18 @@ public class LocalAIPlugin extends Plugin {
     private SpeechRecognizer speech;
     private PluginCall voiceCall;
     private TextToSpeech tts;
-    private static native byte[] nativeGenerate(byte[] path,byte[] prompt,int maxTokens,int threads,int contextLimit);
+    private static native byte[] nativeGenerate(byte[] path,byte[] prompt,int maxTokens,int threads,int timeoutMs,int contextLimit);
+    private static native long[] nativeProgress();
+    private static native void nativeReleaseModel();
+    private volatile boolean destroyed=false;
+    private final Runnable idleRelease=()->{synchronized(this){if(runtime&&!destroyed)worker.execute(()->{synchronized(this){if(!busy.get()&&!destroyed)nativeReleaseModel();}});}};
+    private synchronized void scheduleRelease(){main.removeCallbacks(idleRelease);if(!destroyed)main.postDelayed(idleRelease,15000);}
+    private void addProgress(JSObject out){if(!runtime)return;long[] a=nativeProgress();if(a==null||a.length!=7)return;out.put("phase",a[0]);out.put("processed",a[1]);out.put("phaseTotal",a[2]);out.put("elapsedMs",a[3]);out.put("outputTokens",a[4]);out.put("cancelRequested",a[5]!=0);out.put("deadlineReached",a[6]!=0);}
+
     private static native void nativeCancel();
     private static native void nativeResetCancel();
     @Override public void load(){if(!arm64())return;try{System.loadLibrary("fixquick_ai");runtime=true;}catch(UnsatisfiedLinkError e){runtime=false;}}
+    private String lastStage(){long[] a=nativeProgress();if(a==null||a.length!=7)return "";String[] labels={"نامشخص","آماده‌سازی موتور","بارگذاری مدل","آماده‌سازی حافظه و متن","پردازش سؤال","تولید پاسخ","پایان پردازش","خطای موتور"};int i=(int)a[0];return " (مرحله: "+labels[Math.max(0,Math.min(labels.length-1,i))]+"؛ "+(a[3]/1000)+" ثانیه؛ "+a[4]+" توکن خروجی)";}
     private SharedPreferences prefs(){return getContext().getSharedPreferences("fq_ai_model_v1",Context.MODE_PRIVATE);}
     private File model(){File root=getContext().getExternalFilesDir(null);if(root==null)throw new IllegalStateException("Model storage unavailable");File d=new File(root,DIR);if(!d.exists()&&!d.mkdirs())throw new IllegalStateException("Cannot create model storage");return new File(d,FILE);}
     private DownloadManager dm(){return (DownloadManager)getContext().getSystemService(Context.DOWNLOAD_SERVICE);}
@@ -80,7 +88,7 @@ public class LocalAIPlugin extends Plugin {
         if(!SHA.equals(hex.toString())||size!=f.length()||modified!=f.lastModified())throw new IllegalStateException("SHA-256 mismatch: remove the file and retry");
         prefs().edit().putString("sha",SHA).putLong("size",size).putLong("mtime",modified).apply();error="";
     }catch(Exception e){clearVerified();error="فایل دانلودشده معتبر نیست یا بررسی آن ناموفق بود؛ افزونه را حذف و دوباره دانلود کنید.";}finally{verifying.set(false);}});}
-    private synchronized JSObject state(){File f=model();ActivityManager.MemoryInfo m=mem();JSObject out=new JSObject();long free=new StatFs(f.getParent()).getAvailableBytes();out.put("runtime",runtime);out.put("compatible",runtime&&arm64()&&m.totalMem>=MIN_RAM);out.put("ram",m.totalMem);out.put("availableRam",m.availMem);out.put("minAvailableRam",AiMemoryPolicy.requiredAvailable(m.threshold));out.put("memoryReady",AiMemoryPolicy.canGenerate(m.totalMem,m.availMem,m.threshold,m.lowMemory));out.put("lowMemory",m.lowMemory);out.put("contextLimit",AiMemoryPolicy.contextLimit(m.availMem,m.threshold));out.put("free",free);out.put("required",ESTIMATE+RESERVE);out.put("bytes",0);out.put("total",ESTIMATE);out.put("speech",Build.VERSION.SDK_INT>=31&&SpeechRecognizer.isOnDeviceRecognitionAvailable(getContext()));out.put("busy",busy.get());
+    private synchronized JSObject state(){File f=model();ActivityManager.MemoryInfo m=mem();JSObject out=new JSObject();long free=new StatFs(f.getParent()).getAvailableBytes();out.put("runtime",runtime);out.put("compatible",runtime&&arm64()&&m.totalMem>=MIN_RAM);out.put("ram",m.totalMem);out.put("availableRam",m.availMem);out.put("minAvailableRam",AiMemoryPolicy.requiredAvailable(m.threshold));out.put("memoryReady",AiMemoryPolicy.canGenerate(m.totalMem,m.availMem,m.threshold,m.lowMemory));out.put("lowMemory",m.lowMemory);out.put("contextLimit",AiMemoryPolicy.contextLimit(m.availMem,m.threshold));out.put("free",free);out.put("required",ESTIMATE+RESERVE);out.put("bytes",0);out.put("total",ESTIMATE);out.put("speech",Build.VERSION.SDK_INT>=31&&SpeechRecognizer.isOnDeviceRecognitionAvailable(getContext()));out.put("busy",busy.get());addProgress(out);
         String status="notInstalled";long id=prefs().getLong("download",-1);
         if(verified(f)){status="ready";out.put("bytes",f.length());out.put("total",f.length());}
         else if(id>=0){try(Cursor c=dm().query(new DownloadManager.Query().setFilterById(id))){if(c!=null&&c.moveToFirst()){
@@ -96,23 +104,24 @@ public class LocalAIPlugin extends Plugin {
         JSObject st=state();String s=st.getString("status");if("ready".equals(s)||"downloading".equals(s)||"paused".equals(s)||"verifying".equals(s)){c.resolve(st);return;}
         if(!st.optBoolean("compatible",false)||busy.get())throw new IllegalStateException("گوشی یا موتور اجرای مدل سازگار نیست.");
         String source=sourceUrl(c.getString("url"));
+        if(runtime)nativeReleaseModel();
         File f=model();long previous=prefs().getLong("download",-1);if(previous>=0)dm().remove(previous);if(f.exists()&&!f.delete())throw new IllegalStateException("فایل قبلی حذف نشد.");clearVerified();prefs().edit().remove("download").apply();
         if(new StatFs(f.getParent()).getAvailableBytes()<ESTIMATE+RESERVE)throw new IllegalStateException("حداقل ۳٫۵ گیگابایت فضای آزاد برای دانلود و ذخیره امن لازم است.");
         DownloadManager.Request req=new DownloadManager.Request(Uri.parse(source));req.setTitle("Fix Quick AI — Qwen3 4B");req.setDescription("دانلود مدل آفلاین ۲٫۵ گیگابایت");req.setDestinationInExternalFilesDir(getContext(),null,DIR+"/"+FILE);req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);req.setAllowedOverRoaming(false);req.setAllowedOverMetered(!Boolean.TRUE.equals(c.getBoolean("wifiOnly",true)));
         error="";long id=dm().enqueue(req);prefs().edit().putLong("download",id).apply();c.resolve(state());
     }catch(Exception e){c.reject(e.getMessage());}}
-    @PluginMethod public synchronized void removeModel(PluginCall c){try{if(busy.get()||verifying.get())throw new IllegalStateException("ابتدا تحلیل یا بررسی فایل را تمام کنید.");long id=prefs().getLong("download",-1);if(id>=0)dm().remove(id);File f=model();if(f.exists()&&!f.delete())throw new IllegalStateException("فایل حذف نشد.");prefs().edit().clear().apply();error="";c.resolve(state());}catch(Exception e){c.reject(e.getMessage());}}
+    @PluginMethod public synchronized void removeModel(PluginCall c){try{if(busy.get()||verifying.get())throw new IllegalStateException("ابتدا تحلیل یا بررسی فایل را تمام کنید.");if(runtime)nativeReleaseModel();long id=prefs().getLong("download",-1);if(id>=0)dm().remove(id);File f=model();if(f.exists()&&!f.delete())throw new IllegalStateException("فایل حذف نشد.");prefs().edit().clear().apply();error="";c.resolve(state());}catch(Exception e){c.reject(e.getMessage());}}
     @PluginMethod public synchronized void generate(PluginCall c){try{
         File f=model();String prompt=c.getString("prompt","");if(!runtime||!arm64()||!verified(f))throw new IllegalStateException("مدل معتبر آماده نیست.");if(prompt.isEmpty()||prompt.length()>10000)throw new IllegalStateException("متن سؤال یا مکالمه بیش از حد طولانی است.");
         ActivityManager.MemoryInfo m=mem();long minimum=AiMemoryPolicy.requiredAvailable(m.threshold);
         if(!AiMemoryPolicy.canGenerate(m.totalMem,m.availMem,m.threshold,m.lowMemory))throw new IllegalStateException(String.format(Locale.US,"حافظه برای تحلیل کافی نیست (رم قابل استفاده %.2f از حداقل %.2f گیگابایت%s). فایل مدل سالم است و نیازی به دانلود مجدد نیست.",m.availMem/1e9,minimum/1e9,m.lowMemory?"؛ هشدار کمبود حافظه اندروید":""));
         final int contextLimit=AiMemoryPolicy.contextLimit(m.availMem,m.threshold);
-        if(!busy.compareAndSet(false,true))throw new IllegalStateException("یک تحلیل در حال اجراست.");nativeResetCancel();int max=Math.max(32,Math.min(768,c.getInt("maxTokens",512)));worker.execute(()->{try{
-            byte[] response=nativeGenerate(f.getAbsolutePath().getBytes(StandardCharsets.UTF_8),prompt.getBytes(StandardCharsets.UTF_8),max,Math.min(4,Runtime.getRuntime().availableProcessors()),contextLimit);
-            JSObject out=new JSObject();out.put("text",new String(response,StandardCharsets.UTF_8));busy.set(false);c.resolve(out);
-        }catch(OutOfMemoryError e){busy.set(false);c.reject("حافظه هنگام تحلیل کافی نبود؛ مدل نصب‌شده حفظ شده است.");}catch(Exception e){busy.set(false);c.reject("تحلیل محلی کامل نشد: "+e.getMessage());}});
+        if(destroyed||!busy.compareAndSet(false,true))throw new IllegalStateException("یک تحلیل در حال اجراست.");main.removeCallbacks(idleRelease);nativeResetCancel();int max=Math.max(16,Math.min(768,c.getInt("maxTokens",512)));final int timeout=Boolean.TRUE.equals(c.getBoolean("diagnostic",false))?180000:360000;worker.execute(()->{try{
+            byte[] response=nativeGenerate(f.getAbsolutePath().getBytes(StandardCharsets.UTF_8),prompt.getBytes(StandardCharsets.UTF_8),max,Math.min(4,Runtime.getRuntime().availableProcessors()),timeout,contextLimit);
+            JSObject out=new JSObject();out.put("text",new String(response,StandardCharsets.UTF_8));addProgress(out);busy.set(false);scheduleRelease();c.resolve(out);
+        }catch(OutOfMemoryError e){nativeReleaseModel();busy.set(false);c.reject("حافظه هنگام تحلیل کافی نبود؛ مدل نصب‌شده حفظ شده است.");}catch(Exception e){String where=lastStage();nativeReleaseModel();busy.set(false);c.reject("تحلیل محلی کامل نشد: "+e.getMessage()+where);}});
     }catch(Exception e){c.reject(e.getMessage());}}
-    @PluginMethod public void cancel(PluginCall c){if(runtime&&busy.get())nativeCancel();c.resolve();}
+    @PluginMethod public synchronized void cancel(PluginCall c){if(runtime){if(busy.get())nativeCancel();else nativeReleaseModel();}c.resolve();}
     @PluginMethod public void listen(PluginCall c){if(getPermissionState("mic")!=PermissionState.GRANTED){requestPermissionForAlias("mic",c,"micResult");return;}startVoice(c);}
     @PermissionCallback private void micResult(PluginCall c){if(getPermissionState("mic")==PermissionState.GRANTED)startVoice(c);else c.reject("مجوز میکروفون داده نشد.");}
     private void finishVoice(String text,String err){PluginCall c=voiceCall;voiceCall=null;if(speech!=null){speech.destroy();speech=null;}if(c==null)return;if(err!=null)c.reject(err);else{JSObject r=new JSObject();r.put("text",text);c.resolve(r);}}
@@ -141,5 +150,5 @@ public class LocalAIPlugin extends Plugin {
             if(result==TextToSpeech.ERROR)throw new IllegalStateException("پخش صدا ناموفق بود.");c.resolve();
         }catch(Exception e){c.reject(e.getMessage());}}));
     });}
-    @Override protected void handleOnDestroy(){if(runtime&&busy.get())nativeCancel();main.post(()->{if(voiceCall!=null)finishVoice(null,"صفحه بسته شد.");closeTts();});worker.shutdown();super.handleOnDestroy();}
+    @Override protected synchronized void handleOnDestroy(){destroyed=true;main.removeCallbacks(idleRelease);if(runtime){if(busy.get())nativeCancel();worker.execute(()->nativeReleaseModel());}main.post(()->{if(voiceCall!=null)finishVoice(null,"صفحه بسته شد.");closeTts();});worker.shutdown();super.handleOnDestroy();}
 }

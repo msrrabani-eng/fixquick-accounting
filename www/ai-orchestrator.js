@@ -44,7 +44,7 @@ async function run(q,history,context,h){
  // The report and interpretation remain visibly distinct. The model may never replace a verified amount.
  return {text:evidence.map(r=>r.text).join('\n\n'),ctx:{},details:[...evidence.flatMap(r=>['گزارش خوانده‌شده: '+r.question,...r.details]),...(analysis?['تفسیر Qwen (تحلیل پیشنهادی؛ اعداد ملاک همان گزارش بالا هستند): '+analysis]:[]),...(warning?[warning]:[])],actions:actions.slice(0,4),data:{kind:'tool-result'},source:'Qwen + گزارش واقعی خواندنی برنامه'};
 }
-function diagnosticPrompt(){return frame('Respond in Persian with exactly one JSON object {"kind":"answer","text":"آماده"}. No extra text.',{question:'برای آزمون ساده مدل، کلمه آماده را بنویس.'});}
+function diagnosticPrompt(){return frame('Output exactly {"kind":"answer","text":"آماده"}.',{question:'آماده؟'});}
 function checkDiagnostic(raw){const r=parsePlan(raw);return r?.kind==='answer'&&/^آماده[.!؟ ]*$/.test(r.text);}
 const api={planPrompt,parsePlan,answerPrompt,mayRead,run,diagnosticPrompt,checkDiagnostic};root.FQOrchestrator=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

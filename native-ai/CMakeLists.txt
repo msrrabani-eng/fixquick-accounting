@@ -15,6 +15,13 @@ if(ANDROID AND NOT ANDROID_ABI STREQUAL "arm64-v8a")
   # Preserve ordinary app installability on other Android ABIs; no model engine there.
   add_library(fixquick_ai SHARED unsupported.cpp)
 else()
+  # APK is assembled as Debug for signing compatibility. CPU inference must still
+  # use optimized kernels; scope this to the inference tree, not Java/accounting.
+  foreach(lang C CXX)
+    set(CMAKE_${lang}_FLAGS_DEBUG "${CMAKE_${lang}_FLAGS_DEBUG} -O3 -DNDEBUG")
+  endforeach()
+  set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+  add_compile_options(-O3)
   add_subdirectory(llama.cpp llama-build)
   add_library(fixquick_ai SHARED bridge.cpp)
   target_link_libraries(fixquick_ai PRIVATE llama android log)
