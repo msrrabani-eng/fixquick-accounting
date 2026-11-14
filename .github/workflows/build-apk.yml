@@ -125,6 +125,25 @@ jobs:
       - name: Collect APK
         run: cp android/app/build/outputs/apk/debug/app-debug.apk FixQuick-Accounting.apk
 
+      - name: Verify retired model components and permissions are absent
+        run: |
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | sort -V | tail -1)
+          "$AAPT" dump permissions FixQuick-Accounting.apk | tee apk-permissions.txt
+          if grep -qiE 'RECORD_AUDIO|FOREGROUND_SERVICE_MICROPHONE' apk-permissions.txt; then echo 'Unexpected microphone permission'; exit 1; fi
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('FixQuick-Accounting.apk') as z:
+              names=z.namelist()
+              assert not any('llama' in n.lower() or 'ggml' in n.lower() or 'fq-ai' in n.lower() or n.endswith('.gguf') or 'ai-addon.js' in n or 'ai-orchestrator.js' in n for n in names)
+              manifest=z.read('AndroidManifest.xml')
+              for forbidden in ['RECORD_AUDIO','android.speech.RecognitionService','android.intent.action.TTS_SERVICE']:
+                  assert forbidden.encode('utf-16-le') not in manifest and forbidden.encode() not in manifest, forbidden
+              for dex in (n for n in names if n.endswith('.dex')):
+                  data=z.read(dex)
+                  assert b'LocalAIPlugin' not in data and b'FixQuickAI' not in data and b'nativeGenerate' not in data
+          print('Retired inference and microphone access absent from APK.')
+          PY
+
       - name: Check the APK is signed with the fixed key
         run: |
           AS=$(ls $ANDROID_HOME/build-tools/*/apksigner | sort -V | tail -1)
