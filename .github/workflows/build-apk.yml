@@ -34,6 +34,7 @@ jobs:
           node tests/vol012.test.js
           node tests/vol013.test.js
           node tests/vol014.test.js
+          node tests/vol015.test.js
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |
