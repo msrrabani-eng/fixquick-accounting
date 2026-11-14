@@ -41,7 +41,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class LocalAIPlugin extends Plugin {
     private static final String URL="https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q4_K_M.gguf";
     private static final String SHA="7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5";
-    private static final long ESTIMATE=2500000000L, RESERVE=1000000000L, MIN_RAM=5L*1024*1024*1024;
+    private static final long ESTIMATE=2500000000L, RESERVE=1000000000L, MIN_RAM=AiMemoryPolicy.MIN_RAM;
     private static final String DIR="ai", FILE="Qwen3-4B-Q4_K_M.gguf";
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private final AtomicBoolean busy=new AtomicBoolean(), verifying=new AtomicBoolean();
@@ -51,7 +51,7 @@ public class LocalAIPlugin extends Plugin {
     private SpeechRecognizer speech;
     private PluginCall voiceCall;
     private TextToSpeech tts;
-    private static native byte[] nativeGenerate(byte[] path,byte[] prompt,int maxTokens,int threads);
+    private static native byte[] nativeGenerate(byte[] path,byte[] prompt,int maxTokens,int threads,int contextLimit);
     private static native void nativeCancel();
     private static native void nativeResetCancel();
     @Override public void load(){if(!arm64())return;try{System.loadLibrary("fixquick_ai");runtime=true;}catch(UnsatisfiedLinkError e){runtime=false;}}
@@ -80,7 +80,7 @@ public class LocalAIPlugin extends Plugin {
         if(!SHA.equals(hex.toString())||size!=f.length()||modified!=f.lastModified())throw new IllegalStateException("SHA-256 mismatch: remove the file and retry");
         prefs().edit().putString("sha",SHA).putLong("size",size).putLong("mtime",modified).apply();error="";
     }catch(Exception e){clearVerified();error="فایل دانلودشده معتبر نیست یا بررسی آن ناموفق بود؛ افزونه را حذف و دوباره دانلود کنید.";}finally{verifying.set(false);}});}
-    private synchronized JSObject state(){File f=model();ActivityManager.MemoryInfo m=mem();JSObject out=new JSObject();long free=new StatFs(f.getParent()).getAvailableBytes();out.put("runtime",runtime);out.put("compatible",runtime&&arm64()&&m.totalMem>=MIN_RAM);out.put("ram",m.totalMem);out.put("availableRam",m.availMem);out.put("free",free);out.put("required",ESTIMATE+RESERVE);out.put("bytes",0);out.put("total",ESTIMATE);out.put("speech",Build.VERSION.SDK_INT>=31&&SpeechRecognizer.isOnDeviceRecognitionAvailable(getContext()));out.put("busy",busy.get());
+    private synchronized JSObject state(){File f=model();ActivityManager.MemoryInfo m=mem();JSObject out=new JSObject();long free=new StatFs(f.getParent()).getAvailableBytes();out.put("runtime",runtime);out.put("compatible",runtime&&arm64()&&m.totalMem>=MIN_RAM);out.put("ram",m.totalMem);out.put("availableRam",m.availMem);out.put("minAvailableRam",AiMemoryPolicy.requiredAvailable(m.threshold));out.put("memoryReady",AiMemoryPolicy.canGenerate(m.totalMem,m.availMem,m.threshold,m.lowMemory));out.put("lowMemory",m.lowMemory);out.put("contextLimit",AiMemoryPolicy.contextLimit(m.availMem,m.threshold));out.put("free",free);out.put("required",ESTIMATE+RESERVE);out.put("bytes",0);out.put("total",ESTIMATE);out.put("speech",Build.VERSION.SDK_INT>=31&&SpeechRecognizer.isOnDeviceRecognitionAvailable(getContext()));out.put("busy",busy.get());
         String status="notInstalled";long id=prefs().getLong("download",-1);
         if(verified(f)){status="ready";out.put("bytes",f.length());out.put("total",f.length());}
         else if(id>=0){try(Cursor c=dm().query(new DownloadManager.Query().setFilterById(id))){if(c!=null&&c.moveToFirst()){
@@ -104,11 +104,13 @@ public class LocalAIPlugin extends Plugin {
     @PluginMethod public synchronized void removeModel(PluginCall c){try{if(busy.get()||verifying.get())throw new IllegalStateException("ابتدا تحلیل یا بررسی فایل را تمام کنید.");long id=prefs().getLong("download",-1);if(id>=0)dm().remove(id);File f=model();if(f.exists()&&!f.delete())throw new IllegalStateException("فایل حذف نشد.");prefs().edit().clear().apply();error="";c.resolve(state());}catch(Exception e){c.reject(e.getMessage());}}
     @PluginMethod public synchronized void generate(PluginCall c){try{
         File f=model();String prompt=c.getString("prompt","");if(!runtime||!arm64()||!verified(f))throw new IllegalStateException("مدل معتبر آماده نیست.");if(prompt.isEmpty()||prompt.length()>10000)throw new IllegalStateException("متن سؤال یا مکالمه بیش از حد طولانی است.");
-        ActivityManager.MemoryInfo m=mem();if(m.availMem<2800000000L||m.lowMemory)throw new IllegalStateException("رم آزاد کافی نیست؛ برنامه‌های دیگر را ببندید.");
+        ActivityManager.MemoryInfo m=mem();long minimum=AiMemoryPolicy.requiredAvailable(m.threshold);
+        if(!AiMemoryPolicy.canGenerate(m.totalMem,m.availMem,m.threshold,m.lowMemory))throw new IllegalStateException(String.format(Locale.US,"حافظه برای تحلیل کافی نیست (رم قابل استفاده %.2f از حداقل %.2f گیگابایت%s). فایل مدل سالم است و نیازی به دانلود مجدد نیست.",m.availMem/1e9,minimum/1e9,m.lowMemory?"؛ هشدار کمبود حافظه اندروید":""));
+        final int contextLimit=AiMemoryPolicy.contextLimit(m.availMem,m.threshold);
         if(!busy.compareAndSet(false,true))throw new IllegalStateException("یک تحلیل در حال اجراست.");nativeResetCancel();int max=Math.max(32,Math.min(768,c.getInt("maxTokens",512)));worker.execute(()->{try{
-            byte[] response=nativeGenerate(f.getAbsolutePath().getBytes(StandardCharsets.UTF_8),prompt.getBytes(StandardCharsets.UTF_8),max,Math.min(4,Runtime.getRuntime().availableProcessors()));
+            byte[] response=nativeGenerate(f.getAbsolutePath().getBytes(StandardCharsets.UTF_8),prompt.getBytes(StandardCharsets.UTF_8),max,Math.min(4,Runtime.getRuntime().availableProcessors()),contextLimit);
             JSObject out=new JSObject();out.put("text",new String(response,StandardCharsets.UTF_8));busy.set(false);c.resolve(out);
-        }catch(Exception e){busy.set(false);c.reject("تحلیل محلی کامل نشد: "+e.getMessage());}});
+        }catch(OutOfMemoryError e){busy.set(false);c.reject("حافظه هنگام تحلیل کافی نبود؛ مدل نصب‌شده حفظ شده است.");}catch(Exception e){busy.set(false);c.reject("تحلیل محلی کامل نشد: "+e.getMessage());}});
     }catch(Exception e){c.reject(e.getMessage());}}
     @PluginMethod public void cancel(PluginCall c){if(runtime&&busy.get())nativeCancel();c.resolve();}
     @PluginMethod public void listen(PluginCall c){if(getPermissionState("mic")!=PermissionState.GRANTED){requestPermissionForAlias("mic",c,"micResult");return;}startVoice(c);}

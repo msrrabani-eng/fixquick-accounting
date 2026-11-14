@@ -7,7 +7,7 @@ APP=ROOT/'android/app'; SRC=ROOT/'native-ai'
 java=APP/'src/main/java/ir/fixquick/accounting'; cpp=APP/'src/main/cpp/fq-ai'
 java.mkdir(parents=True,exist_ok=True); cpp.mkdir(parents=True,exist_ok=True)
 for name in ['CMakeLists.txt','bridge.cpp','unsupported.cpp']: shutil.copy2(SRC/name,cpp/name)
-shutil.copy2(SRC/'LocalAIPlugin.java',java/'LocalAIPlugin.java')
+for name in ['LocalAIPlugin.java','AiMemoryPolicy.java']: shutil.copy2(SRC/name,java/name)
 # Pin the exact upstream source revision, not a mutable main branch.
 commit='a7a98e0fffed794396b3fbad4dcdbbc184963645'
 up=cpp/'llama.cpp'
@@ -24,6 +24,14 @@ compat='// Fix Quick: Android API 22 memory-advice compatibility.\n#if defined(_
 if compat not in s:
     assert s.count(marker)==1 and s.count('if (posix_madvise(')==2, 'Unexpected upstream mmap implementation'
     mmap_source.write_text(s.replace(marker,compat+marker,1))
+# Do not populate the entire file-backed model at once on Android. Preserve mmap
+# and let the kernel page weights as needed; reduces startup memory pressure.
+s=mmap_source.read_text()
+anchor='        if (numa) { prefetch = 0; }\n'
+lazy='#if defined(__ANDROID__)\n        prefetch = 0; // Fix Quick: demand-page weights on mobile\n#endif\n'
+if lazy not in s:
+    assert s.count(anchor)==1, 'Unexpected upstream prefetch implementation'
+    mmap_source.write_text(s.replace(anchor,anchor+lazy,1))
 (APP/'src/main/assets').mkdir(parents=True,exist_ok=True)
 shutil.copy2(up/'LICENSE',APP/'src/main/assets/llama-cpp-LICENSE.txt')
 activity=java/'MainActivity.java'; s=activity.read_text()

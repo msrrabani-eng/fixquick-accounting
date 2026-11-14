@@ -41,6 +41,9 @@ jobs:
           node tests/vol018.test.js
           node tests/vol019.test.js
           node tests/vol020.test.js
+          node tests/vol021.test.js
+          javac -d /tmp/fq-ai-policy native-ai/AiMemoryPolicy.java tests/AiMemoryPolicyTest.java
+          java -cp /tmp/fq-ai-policy ir.fixquick.accounting.AiMemoryPolicyTest
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |

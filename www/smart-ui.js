@@ -9,7 +9,7 @@ function pageSmartAssistant() {
   const examples=['محاسبه سود معامله','بیشترین کارکردمون با کی بوده؟','فروش این ماه چقدر بوده؟','چک‌های سررسید ۷ روز آینده','آیا ثبت تکراری داریم؟','سود ماه قبل چقدر بوده؟','بیشترین خرید از کی بوده؟','مانده حساب یک مشتری','پرفروش‌ترین کالا از نظر تعداد چیه؟'];
   const history=smartTalk.length ? smartTalk.map(m => '<div class="fq-msg '+(m.role==='user'?'fq-user':'fq-bot')+'"><div>'+esc(m.text)+'</div>'+(m.details&&m.details.length?'<ul>'+m.details.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+(m.actions&&m.actions.length?'<div class="chips wrap">'+m.actions.map(x=>'<button type="button" class="chip" data-act="go" data-h="'+esc(x.route)+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+'</div>').join('') : '<div class="hint center">سؤالتان را درباره اطلاعات ثبت‌شده بپرسید. اعداد واقعی از داده‌های همین برنامه محاسبه می‌شوند؛ راهنمای عمومی مدل نیاز به بررسی دارد.</div>';
   const h='<section class="ui20-chat"><div class="ui20-scroll"><div class="ui2-chat-head"><div class="ch">'+ico('chat')+'دستیار حسابداری</div><button type="button" class="lnk" id="fq-chat-reset">'+ico('plus')+'گفت‌وگوی جدید</button></div>'+
-    '<div class="ui2-ai-tools"><button type="button" class="chip" id="fq-ai-addon">'+ico('download')+'افزونه هوش مصنوعی</button><span id="fq-ai-tag" class="hint">مدل محلی نصب شده</span><button type="button" class="chip" id="fq-ai-speak">خواندن پاسخ</button></div>'+
+    '<div class="ui2-ai-tools"><button type="button" class="chip" id="fq-ai-addon">'+ico('settings')+'مدیریت افزونه</button><span id="fq-ai-tag" class="hint">مدل محلی نصب شده</span><button type="button" class="chip" id="fq-ai-speak">خواندن پاسخ</button></div>'+
     '<details class="ui2-chat-intro"><summary>راهنمای دستیار · آفلاین</summary><p class="hint">تحلیل آفلاین گردش، فروش، خرید، سود، هزینه، موجودی، چک و مانده حساب؛ سؤال‌های مبهم نیاز به توضیح دارند. اطلاعاتی ارسال یا ثبت نمی‌شود.</p></details>'+
     '<div id="fq-chat-history" class="fq-chat-history" aria-live="polite">'+history+(aiBusy?'<div class="fq-msg fq-bot">در حال تحلیل محلی… <button type="button" id="fq-ai-cancel" class="lnk">توقف</button></div>':'')+'</div>'+
     (smartTalk.length?'':'<details class="ui20-examples"><summary>نمونه سؤال‌ها</summary><div class="chips wrap ui2-chat-examples">'+examples.map(x=>'<button type="button" class="chip" data-act="fqChatExample" data-q="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div></details>')+'</div>'+
@@ -19,7 +19,7 @@ function pageSmartAssistant() {
     $('#fq-chat-reset').onclick=()=>{aiCancel();smartTalk=[];smartContext={};render();};
     $('#fq-ai-addon').onclick=aiOpenAddon;$('#fq-ai-mic').onclick=aiVoiceInput;$('#fq-ai-speak').onclick=aiSpeakLast;
     const stop=$('#fq-ai-cancel');if(stop)stop.onclick=()=>{aiCancel();smartTalk.push({role:'assistant',text:'تحلیل متوقف شد.'});render();};
-    const tag=$('#fq-ai-tag');aiReadStatus().then(()=>{if(tag?.isConnected&&!aiChatAllowed())aiLockChat();});
+    const tag=$('#fq-ai-tag');aiReadStatus().then(s=>{if(!tag?.isConnected)return;if(!aiChatAllowed()){aiLockChat();return;}tag.textContent=s.memoryReady===false?'مدل نصب‌شده · حافظه فعلاً محدود':'مدل محلی نصب‌شده';});
     const b=$('.ui20-scroll');if(b&&smartTalk.length)b.scrollTop=b.scrollHeight;
   }};
 }
@@ -33,7 +33,8 @@ async function smartAskQuestion(text){
 
   const opts={today:today(),allow:{reports:can('reports'),balances:can('balances'),cost:can('cost'),money:can('money'),warehouse:routeAllowed('products')}};
   const history=smartTalk.slice(-4),context=smartContext,owner=smartCurrentUser();
-  let out=Core.financeScenario.ask(q,context,opts)||Core.smartAssistant.ask(S,q,context,opts);
+  const greeting=/^(?:سلام(?:\s+(?:عرض\s+ادب|علیکم|خسته\s+نباشید))?|درود|وقت\s+بخیر|صبح\s+بخیر|شب\s+بخیر)[\s!؟?،.]*$/u.test(q);
+  let out=greeting?{text:'سلام، خوش آمدید. می‌توانید درباره حساب اشخاص، سود و زیان، چک‌ها یا روش ثبت یک معامله سؤال کنید.',ctx:context,data:{kind:'greeting'},details:[],actions:[]}:Core.financeScenario.ask(q,context,opts)||Core.smartAssistant.ask(S,q,context,opts);
   // Deterministic financial results and confirmations have priority. The optional model
   // handles unsupported / unclear questions, not privileged writes or automatic confirmations.
   const complex=/چطور|چگونه|چرا|روش ثبت|سند زدن|سند بزن|تحلیل|مشاوره|بهتره|بهتر است/.test(q);
@@ -46,7 +47,7 @@ async function smartAskQuestion(text){
     const live={today:today(),allow:{reports:can('reports'),balances:can('balances'),cost:can('cost'),money:can('money'),warehouse:routeAllowed('products')}};
     const interpreted=FQAI.route(modelOut,{query:x=>Core.smartAssistant.ask(S,x,{},live),finance:x=>Core.financeScenario.ask(x,{},live)});
     if(interpreted)out=interpreted;
-  }catch(e){if(job!==aiJob||owner!==smartCurrentUser())return;out={...out,details:[...(out.details||[]),'مدل محلی پاسخ نداد: '+aiError(e)]};}
+  }catch(e){if(job!==aiJob||owner!==smartCurrentUser())return;out={...out,text:out.data?.kind==='unsupported'?'تحلیل هوش مصنوعی کامل نشد. مدل نصب‌شده را حذف نکنید؛ جزئیات خطا را بررسی کنید.':out.text,details:[...(out.details||[]),'مدل محلی پاسخ نداد: '+aiError(e)]};}
   finally{if(job===aiJob)aiBusy=false;}
   if(job!==aiJob||owner!==smartCurrentUser())return;}
   smartContext=out.ctx||{}; smartTalk.push({role:'assistant',text:out.text,details:out.details,actions:out.actions});
