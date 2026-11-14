@@ -7,10 +7,11 @@ function pageSmartAssistant() {
   smartResetForUser();
   const examples=['فروش این ماه چقدر بوده؟','چک‌های سررسید ۷ روز آینده','آیا ثبت تکراری داریم؟','سود ماه قبل چقدر بوده؟','مانده حساب یک مشتری'];
   const history=smartTalk.length ? smartTalk.map(m => '<div class="fq-msg '+(m.role==='user'?'fq-user':'fq-bot')+'"><div>'+esc(m.text)+'</div>'+(m.details&&m.details.length?'<ul>'+m.details.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+(m.actions&&m.actions.length?'<div class="chips wrap">'+m.actions.map(x=>'<button type="button" class="chip" data-act="go" data-h="'+esc(x.route)+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+'</div>').join('') : '<div class="hint center">سؤالتان را درباره اطلاعات ثبت‌شده بپرسید. پاسخ‌ها فقط از داده‌های همین برنامه محاسبه می‌شوند.</div>';
-  const h='<div class="card"><div class="ch">دستیار گفت‌وگویی حسابداری</div><p class="hint">آفلاین، بدون ارسال اطلاعات مشتریان به اینترنت، فقط خواندنی. این نسخه یک تحلیل‌گر گفت‌وگویی قاعده‌محور است، نه هوش مصنوعی مولد. پاسخ نامطمئن را حدس نمی‌زند.</p></div>'+
+  const h='<div class="ui2-chat-head"><div class="ch">'+ico('chat')+'دستیار حسابداری</div><button type="button" class="lnk" id="fq-chat-reset">'+ico('plus')+'گفت‌وگوی جدید</button></div>'+
+    '<details class="ui2-chat-intro"><summary>راهنمای دستیار · آفلاین</summary><p class="hint">پاسخ‌ها بر اساس داده‌های ثبت‌شده و مجوزهای کاربر هستند؛ این دستیار قاعده‌محور است، اطلاعاتی ارسال یا ثبت نمی‌کند و جواب نامطمئن را حدس نمی‌زند.</p></details>'+
     '<div id="fq-chat-history" class="fq-chat-history" aria-live="polite">'+history+'</div>'+
-    '<form id="fq-chat-form" class="card"><label class="fld"><span>سؤال جدید یا ادامه سؤال قبلی</span><textarea id="fq-chat-input" class="inp" rows="2" maxlength="500" placeholder="مثلاً: از علی رضایی چقدر طلب دارم؟" required></textarea></label><div class="row2"><button class="btn blue" type="submit">پرسیدن</button><button class="btn ghost" type="button" id="fq-chat-reset">گفت‌وگوی جدید</button></div></form>'+
-    '<div class="chips wrap">'+examples.map(x=>'<button type="button" class="chip" data-act="fqChatExample" data-q="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div>';
+    (smartTalk.length?'':'<div class="chips wrap ui2-chat-examples">'+examples.map(x=>'<button type="button" class="chip" data-act="fqChatExample" data-q="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div>')+
+    '<form id="fq-chat-form" class="card ui2-chat-compose"><textarea id="fq-chat-input" class="inp" rows="1" maxlength="500" aria-label="سؤال جدید" placeholder="سؤال خود را بنویسید…" required></textarea><button class="btn blue" type="submit" aria-label="ارسال سؤال">'+ico('in')+'</button></form>';
   return {title:'دستیار گفت‌وگویی',html:h,back:'#/home',mount:()=>{
     const f=$('#fq-chat-form'); f.onsubmit=e=>{e.preventDefault(); smartAskQuestion($('#fq-chat-input').value);};
     $('#fq-chat-reset').onclick=()=>{smartTalk=[];smartContext={};render();};
@@ -56,7 +57,7 @@ function entityLive(form,kind,id) {
   let t; const refresh=()=>{clearTimeout(t);t=setTimeout(()=>{
     if(!form.isConnected)return;
     const matches=Core.entityGuard.find(S,kind,entityCandidate(form),id);
-    box.hidden=!matches.length;box.textContent=matches.length?'⚠ احتمال ثبت تکراری: '+matches.slice(0,5).map(m=>entityMatchText(m,kind)).join('؛ ')+(matches.length>5?'؛ و '+(matches.length-5)+' مورد دیگر':''):'';
+    box.hidden=!matches.length;const opened=!!box.querySelector('details[open]');box.replaceChildren();if(matches.length){const detail=document.createElement('details');detail.open=opened;const sum=document.createElement('summary');sum.textContent=(matches.some(m=>m.phone)?'شماره تماس تکراری':'نام مشابه')+' · '+fa(matches.length)+' مورد';detail.append(sum);const list=document.createElement('ul');matches.slice(0,8).forEach(m=>{const li=document.createElement('li');li.textContent=entityMatchText(m,kind);list.append(li);});detail.append(list);if(matches.length>8){const more=document.createElement('div');more.textContent=fa(matches.length-8)+' مورد دیگر؛ پیش از ثبت بررسی کنید.';detail.append(more);}box.append(detail);}
   },180);};
   form.addEventListener('input',refresh); form.addEventListener('change',refresh);refresh();
 }

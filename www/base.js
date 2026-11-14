@@ -170,7 +170,7 @@ function datePick(iso, cb) {
   });
 }
 function dateField(name, iso, label) {
-  return '<label class="fld"><span>' + esc(label || 'تاریخ') + '</span><div class="date"><input class="inp" name="' + name + '" data-date inputmode="numeric" autocomplete="off" value="' + esc(fa(Core.isoToJalali(iso))) + '" placeholder="۱۴۰۵/۰۱/۰۱"><button type="button" class="cal-btn" data-pickdate aria-label="تقویم">📅</button></div></label>';
+  return '<label class="fld"><span>' + esc(label || 'تاریخ') + '</span><div class="date"><input class="inp" name="' + name + '" data-date inputmode="numeric" autocomplete="off" value="' + esc(fa(Core.isoToJalali(iso))) + '" placeholder="۱۴۰۵/۰۱/۰۱"><button type="button" class="cal-btn" data-pickdate aria-label="تقویم">' + ico('calendar') + '</button></div></label>';
 }
 function moneyField(name, val, label, ph) {
   return '<label class="fld"><span>' + esc(label) + '</span><input class="inp ltr" name="' + name + '" data-money inputmode="numeric" autocomplete="off" placeholder="' + esc(ph || '۰') + '" value="' + (val ? Core.fmtInput(val) : '') + '"></label>';
@@ -274,18 +274,18 @@ const stamp = () => Core.isoToJalali(Core.todayISO()).replace(/\//g, '');
 /* ── result handler ── */
 async function done(r, okMsg) { if (!r.ok) { toast(r.error, true); return false; } if (!(await save())) return false; if (okMsg) toast(okMsg); render(); return true; } // acknowledge only after IndexedDB confirms the write
 /* ── appearance (theme / accent / font size) ── */
-const ACCENTS = { blue: ['#2563eb', '#1d4ed8', 'آبی'], green: ['#16a34a', '#15803d', 'سبز'], purple: ['#7c3aed', '#6d28d9', 'بنفش'], orange: ['#ea580c', '#c2410c', 'نارنجی'], red: ['#dc2626', '#b91c1c', 'قرمز'], teal: ['#0d9488', '#0f766e', 'فیروزه‌ای'] };
+const ACCENTS = { neutral: ['#414b59', '#313a46', 'خنثی'], blue: ['#2563eb', '#1d4ed8', 'آبی'], green: ['#16a34a', '#15803d', 'سبز'], purple: ['#7c3aed', '#6d28d9', 'بنفش'], orange: ['#ea580c', '#c2410c', 'نارنجی'], red: ['#dc2626', '#b91c1c', 'قرمز'], teal: ['#0d9488', '#0f766e', 'فیروزه‌ای'] };
 const FS_MIN = 0.8, FS_MAX = 1.5;
 // everything the user personalised lives in S.settings (and so in every backup); apply it all after load/restore
 function applySettings(s) { s = s || {}; Core.setUnit(s.unit); applyAppearance(s); }
 function applyAppearance(s) {
   s = s || {}; const r = document.documentElement, th = s.theme === 'light' || s.theme === 'dark' ? s.theme : 'auto';
   if (th === 'auto') r.removeAttribute('data-theme'); else r.setAttribute('data-theme', th);
-  const a = ACCENTS[s.accent] || ACCENTS.blue; r.style.setProperty('--blue', a[0]); r.style.setProperty('--blue2', a[1]);
+  const a = ACCENTS[s.accent] || ACCENTS.neutral; r.style.setProperty('--blue', a[0]); r.style.setProperty('--blue2', a[1]);
   const fs = Math.min(FS_MAX, Math.max(FS_MIN, Number(s.fontScale) || 1)); r.style.setProperty('--fs', String(fs));
   const dark = th === 'dark' || (th === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme:dark)').matches);
-  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = dark ? '#0a0f1a' : '#111827';
-  try { localStorage.setItem('fq_look', JSON.stringify({ theme: th, accent: s.accent || 'blue', fontScale: fs })); } catch (e) { /* ignore */ }
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = dark ? '#0a0f1a' : '#ffffff';
+  try { localStorage.setItem('fq_look', JSON.stringify({ theme: th, accent: s.accent || 'neutral', fontScale: fs })); } catch (e) { /* ignore */ }
 }
 try { applyAppearance(JSON.parse(localStorage.getItem('fq_look') || '{}')); } catch (e) { /* ignore */ }
 function sign(b) { return b > 0 ? 'طلب من' : b < 0 ? 'بدهی من' : 'تسویه'; }

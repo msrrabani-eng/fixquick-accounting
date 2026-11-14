@@ -28,7 +28,7 @@ async function openScanner(o) {
   el.innerHTML = '<video playsinline muted autoplay></video><div class="sc-frame"><i></i></div><div class="sc-ring" hidden></div>' +
     '<div class="sc-top"><button type="button" class="sc-x" aria-label="بستن">✕</button><b>' + esc(o.title || 'اسکن کد') + '</b><span></span></div>' +
     '<div class="sc-msg">' + esc(o.hint || 'کد را داخل کادر بگیرید. برای فوکوس، روی تصویر بزنید.') + '</div>' +
-    '<div class="sc-bar"><button type="button" class="sc-b" data-sc="torch" hidden>🔦<small>فلش</small></button><label class="sc-zoom" hidden><span>زوم</span><input type="range" min="1" max="1" step="0.1" value="1"></label><button type="button" class="sc-b" data-sc="flip" hidden>🔄<small>دوربین</small></button><button type="button" class="sc-b" data-sc="type">⌨️<small>دستی</small></button></div>';
+    '<div class="sc-bar"><button type="button" class="sc-b" data-sc="torch" hidden>' + ico('flashlight') + '<small>فلش</small></button><label class="sc-zoom" hidden><span>زوم</span><input type="range" min="1" max="1" step="0.1" value="1"></label><button type="button" class="sc-b" data-sc="flip" hidden>' + ico('rotate') + '<small>دوربین</small></button><button type="button" class="sc-b" data-sc="type">' + ico('keyboard') + '<small>دستی</small></button></div>';
   document.body.appendChild(el); document.body.classList.add('noscroll');
   const v = el.querySelector('video'), msg = el.querySelector('.sc-msg'), ring = el.querySelector('.sc-ring');
   el.querySelector('.sc-x').onclick = scanStop;

@@ -93,12 +93,12 @@ assert.equal(Drafts.get('tx:receipt:new').fields.amount[0].value,'100');
 // The primary invoice screen has a visible cancel at top and near submit.
 const pages=fs.readFileSync(require.resolve('../www/pages.js'),'utf8');
 assert.ok(pages.includes('data-act="invCancel">لغو فاکتور'));
-assert.ok(pages.includes('data-act="invCancel">لغو / خروج از فاکتور'));
+assert.ok(pages.includes('data-act="invCancel">خروج'));
 assert.ok(pages.includes('Drafts.requestExit(f,()=>goHash(destination)'));
 assert.ok(!pages.includes("Drafts.clear(f); Drafts.discard(key); render();")); // old bug: staying on abandoned invoice
 const workflow=fs.readFileSync(require.resolve('../.github/workflows/build-apk.yml'),'utf8');
 assert.ok(workflow.includes('node tests/vol013.test.js'));
-assert.ok(/fq-acc-vol01[345]/.test(fs.readFileSync(require.resolve('../www/sw.js'),'utf8')));
+assert.ok(/fq-acc-vol01[3-6]/.test(fs.readFileSync(require.resolve('../www/sw.js'),'utf8')));
 assert.equal(data.size>0,true);
 otherCtl.clear();txCtl.clear();
 console.log('v013: save, discard, resume, continue, sheet cancel, isolation and UI wiring passed');

@@ -30,7 +30,7 @@ assert.equal(JSON.stringify(st),before,'read-only check must not alter any recor
 const pages=fs.readFileSync(require.resolve('../www/pages.js'),'utf8'),ui=fs.readFileSync(require.resolve('../www/smart-ui.js'),'utf8');
 const html=fs.readFileSync(require.resolve('../www/index.html'),'utf8'),sw=fs.readFileSync(require.resolve('../www/sw.js'),'utf8');
 for(const s of ["entityLive(sh.q('#pf'),'person',p&&p.id)","entityConfirm(f,'person',d,p&&p.id)","entityLive(f,'product',p&&p.id)","entityConfirm(f,'product',d,p&&p.id)","entityLive(sh.q('#pq'),'person',null)","entityConfirm(f,'person',d,null)","entityBatchConfirm('person',candidates)","entityBatchConfirm('product',fresh)"])assert.ok(pages.includes(s),s);
-assert.ok(ui.includes('box.textContent=')&&ui.includes('entityPending'));
+assert.ok(ui.includes("document.createElement('details')")&&ui.includes('sum.textContent=')&&ui.includes('li.textContent=entityMatchText(m,kind)')&&ui.includes('entityPending'));
 assert.ok(html.includes('<script src="entity-guard.js"></script>')&&sw.includes("'entity-guard.js'"));
 assert.ok(fs.readFileSync(require.resolve('../.github/workflows/build-apk.yml'),'utf8').includes('node tests/vol015.test.js'));
 console.log('v015: name similarity, phone normalization, archive/self exclusion, product variants, batch and UI wiring passed');
