@@ -22,7 +22,7 @@ function fastIntent(question,context={}){
  }
  return null;
 }
-// v026: exact natural-language navigation to a typed, read-only local report.
+// v026: exact natural-language navigation to typed read-only reports.
 function directReport(question,context={}){
  if(context.weighted||context.finance)return null;
  const q=C.norm(String(question||'')).replace(/[؟?!،.!]+$/g,'').trim();
@@ -31,7 +31,23 @@ function directReport(question,context={}){
  const amount='چقدر|چه قدر|چه مبلغی';
  const verb='داشتیم|بوده|بود|شده|است|هست';
  const patterns=[
-  '^('+period+') ('+amount+') ('+metric+')(?: (?:'+verb+'))?
+  '^('+period+') ('+amount+') ('+metric+')(?: (?:'+verb+'))?$',
+  '^('+amount+') ('+period+') ('+metric+')(?: (?:'+verb+'))?$',
+  '^('+metric+') ('+period+') ('+amount+')(?: (?:'+verb+'))?$',
+  '^('+period+') ('+metric+') ('+amount+')(?: (?:'+verb+'))?$',
+  '^(?:مجموع|جمع|مبلغ|کل) ('+metric+') ('+period+')(?: ('+amount+')(?: (?:'+verb+'))?)?$',
+  '^('+metric+') ('+period+') چقدره$',
+  '^('+period+') ('+metric+') چقدره$'
+ ];
+ const periods={'امروز':'today','دیروز':'yesterday','این هفته':'week','هفته جاری':'week','هفته قبل':'prevweek','هفته گذشته':'prevweek','این ماه':'mtd','ماه جاری':'mtd','ماه قبل':'prevmonth','ماه گذشته':'prevmonth'};
+ const metrics={'فروش':'sales','خرید':'purchases','سود':'profit','هزینه':'expense','دریافت':'receipts','پرداخت':'payments'};
+ for(const pattern of patterns){const m=q.match(new RegExp(pattern));if(!m)continue;
+  const parts=m.slice(1),p=parts.find(x=>Object.hasOwn(periods,x)),a=parts.find(x=>Object.hasOwn(metrics,x));
+  if(p&&a)return {metric:metrics[a],mode:'total',period:periods[p]};
+ }
+ return null;
+}
+function fastPrompt(q,route){
  if(route.kind==='greeting')return frame('Reply naturally and briefly in Persian. Output only JSON: {"kind":"answer","text":"..."} . No ledger facts.',{question:clean(q,140)});
  return frame('Persian accounting assistant. Output only JSON {"kind":"read","requests":[{"metric":"sales","mode":"total","period":"today"}]}. Choose metric sales or purchases; period today or yesterday from question. If unclear: {"kind":"clarify","text":"..."} . Never invent amounts.',{question:clean(q,140)});
 }
