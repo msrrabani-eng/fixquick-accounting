@@ -84,7 +84,10 @@ jobs:
       - name: Sync web files
         run: npx cap sync android
 
+      # Explicit package list: setup-android v3 defaults to retired "tools".
       - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Prepare optional native local AI engine
         run: |
@@ -94,6 +97,8 @@ jobs:
           fi
           test -x "$SDKMANAGER"
           "$SDKMANAGER" --install "ndk;27.2.12479018" "cmake;3.22.1"
+          test -f "$ANDROID_HOME/ndk/27.2.12479018/source.properties"
+          test -x "$ANDROID_HOME/cmake/3.22.1/bin/cmake"
           python3 tools/install_local_ai.py
 
       - name: Use the fixed signing key (so updates install over the old version)
