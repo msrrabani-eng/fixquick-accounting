@@ -11,3 +11,11 @@ for(const s of [`aiStatus.runtime=false`,`aiStatus.compatible=false`,`aiChatOwne
 const pages=read('www/pages.js'),ui=read('www/smart-ui.js'),css=read('www/ui2.css');assert.equal((pages.match(/data-act="aiLaunch"/g)||[]).length,1);assert.ok(!pages.includes("row('chat', 'دستیار هوشمند', '#/assistant')"));assert.ok(ui.includes('if(!aiChatAllowed())return'));assert.ok(ui.includes('await aiReadStatus()'));assert.ok(ui.includes('ui20-scroll'));assert.ok(css.includes('grid-template-rows:minmax(0,1fr) auto'));assert.ok(css.includes('.ui20-chat .ui2-chat-compose{position:static'));
 assert.ok(read('www/sw.js').includes('vol020'));assert.ok(read('www/diag.js').includes("APP_VER = '1.51'"));assert.ok(read('.github/workflows/build-apk.yml').includes('node tests/vol020.test.js'));
 console.log('v020: readiness gate, stale opt-in, user isolation, home-only entry, bounded chat layout and build wiring passed');
+
+// Stock toolbar: expanding the disclosure must not squeeze the five actions into its closed width.
+const stockUi=read('www/ui2.js');
+assert.ok(stockUi.includes("bar.classList.add('ui2-stock-toolbar')"));
+assert.ok(stockUi.includes("label.className='ui2-tool-label'"));
+assert.ok(css.includes('.ui2-stock-toolbar>.ui2-stock-menu[open]{flex:1 0 100%;width:100%}'));
+assert.ok(css.includes('.ui2-stock-menu>.ui2-menu-items{grid-template-columns:minmax(0,1fr)'));
+console.log('v020 final: full-width stock disclosure and wrapping rules retained');
