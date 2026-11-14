@@ -1,58 +1,36 @@
-/* Fix Quick v014 — read-only review dialogs and offline conversational UI. */
+/* Read-only accounting conversation and review dialogs. */
 'use strict';
-let smartTalk = [], smartContext = {}, smartTalkUser = null, smartDeep = false;
-function smartCurrentUser() { try { return typeof curName === 'function' ? JSON.stringify([String(curName()),isAdmin(),...['money','balances','reports','cost','warehouse','purchase'].map(k=>can(k)),routeAllowed('products')]) : 'owner'; } catch (_) { return 'owner'; } }
-function smartResetForUser() { const u=smartCurrentUser(); if(smartTalkUser!==u){ aiCancel(); smartTalkUser=u; smartTalk=[]; smartContext={}; smartDeep=false; } }
-function pageSmartAssistant() {
-  smartResetForUser();
-  if(!aiReportChatAllowed())return {title:'دستیار هوشمند',back:'#/home',html:'<div class="card ai20-locked"><div class="ch">'+ico('lock')+'دستیار هنوز آماده نیست</div><p>برای ورود امن دستیار را از آیکون صفحه اصلی باز کنید.</p><button class="btn blue" data-act="go" data-h="#/home">بازگشت به خانه</button></div>'};
-  const examples=['دیروز چقدر فروش داشتیم؟','این ماه چقدر سود داشتیم؟','چک های ۷ روز آینده','اولویت وصول مطالبات','پیش بینی نقدینگی ۷ روز آینده','کالاهای راکد','آیا ثبت تکراری داریم؟','رأس‌گیری چک‌ها','محاسبه سود معامله','ارزش انبار'];
-  const history=smartTalk.length ? smartTalk.map(m => '<div class="fq-msg '+(m.role==='user'?'fq-user':'fq-bot')+'"><div>'+esc(m.text)+'</div>'+(m.source?'<small class="hint">'+esc(m.source)+'</small>':'')+(m.details&&m.details.length?'<ul>'+m.details.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+(m.actions&&m.actions.length?'<div class="chips wrap">'+m.actions.map(x=>'<button type="button" class="chip" data-act="go" data-h="'+esc(x.route)+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+'</div>').join('') : '<div class="hint center">سؤالتان را درباره اطلاعات ثبت‌شده بپرسید. اعداد واقعی از داده‌های همین برنامه محاسبه می‌شوند؛ راهنمای عمومی مدل نیاز به بررسی دارد.</div>';
-  const h='<section class="ui20-chat"><div class="ui20-scroll"><div class="ui2-chat-head"><div class="ch">'+ico('chat')+'دستیار حسابداری</div><button type="button" class="lnk" id="fq-chat-reset">'+ico('plus')+'گفت‌وگوی جدید</button></div>'+
-    '<div class="ui2-ai-tools"><button type="button" class="chip" id="fq-ai-addon">'+ico('settings')+'مدیریت افزونه</button><span id="fq-ai-tag" class="hint">گزارش سریع فعال است</span><button type="button" class="chip" id="fq-ai-mode" aria-pressed="'+(smartDeep?'true':'false')+'"'+(aiBusy?' disabled':'')+'>'+(smartDeep?'Qwen · تحلیل اختیاری فعال':'تحلیل با Qwen')+'</button><button type="button" class="chip" id="fq-ai-speak">خواندن پاسخ</button></div>'+
-    '<details class="ui2-chat-intro"><summary>راهنمای دستیار · آفلاین</summary><p class="hint">حالت پیش‌فرض گزارش سریع و خواندنی است؛ برای سؤال آزاد یا تحلیل عمیق، دکمه تحلیل با Qwen را فعال کنید. گزارش سریع به نصب مدل نیاز ندارد. هیچ سندی ثبت و هیچ اطلاعاتی ارسال نمی‌شود.</p></details>'+
-    '<div id="fq-chat-history" class="fq-chat-history" aria-live="polite">'+history+(aiBusy?'<div class="fq-msg fq-bot"><span id="fq-ai-progress">در حال تحلیل محلی…</span> <button type="button" id="fq-ai-cancel" class="lnk">توقف</button></div>':'')+'</div>'+
-    (smartTalk.length?'':'<details class="ui20-examples"><summary>نمونه سؤال‌ها</summary><div class="chips wrap ui2-chat-examples">'+examples.map(x=>'<button type="button" class="chip" data-act="fqChatExample" data-q="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div></details>')+'</div>'+
-    '<form id="fq-chat-form" class="card ui2-chat-compose"><textarea id="fq-chat-input" class="inp" rows="1" maxlength="1800" aria-label="سؤال جدید" placeholder="سؤال خود را بنویسید…" required></textarea><button class="btn ghost" type="button" id="fq-ai-mic" aria-label="گفتار فارسی">'+ico('mic')+'</button><button class="btn blue" type="submit" aria-label="ارسال سؤال"'+(aiBusy?' disabled':'')+'>'+ico('send')+'</button></form></section>';
-  return {title:'دستیار گفت‌وگویی',html:h,back:'#/home',mount:()=>{
-    const f=$('#fq-chat-form'); f.onsubmit=e=>{e.preventDefault(); smartAskQuestion($('#fq-chat-input').value);};
-    $('#fq-chat-reset').onclick=()=>{aiCancel();smartTalk=[];smartContext={};smartDeep=false;render();};
-    $('#fq-ai-mode').onclick=()=>{if(aiBusy)return;smartDeep=!smartDeep;const b=$('#fq-ai-mode');b.setAttribute('aria-pressed',String(smartDeep));b.textContent=smartDeep?'Qwen · تحلیل اختیاری فعال':'تحلیل با Qwen';};$('#fq-ai-addon').onclick=aiOpenAddon;$('#fq-ai-mic').onclick=aiVoiceInput;$('#fq-ai-speak').onclick=aiSpeakLast;
-    const stop=$('#fq-ai-cancel');if(stop)stop.onclick=()=>{aiCancel();smartTalk.push({role:'assistant',text:'تحلیل متوقف شد.'});render();};
-    const tag=$('#fq-ai-tag');aiReadStatus().then(s=>{if(!tag?.isConnected)return;if(!aiReportChatAllowed()){aiLockChat();return;}tag.textContent=aiReady()?(s.memoryReady===false?'Qwen نصب‌شده · حافظه محدود':'Qwen نصب‌شده · اختیاری'):'گزارش سریع فعال · Qwen نصب نیست یا آماده نیست';});
-    const b=$('.ui20-scroll');if(b&&smartTalk.length)b.scrollTop=b.scrollHeight;
-  }};
+let smartTalk=[],smartContext={},smartTalkUser=null,smartBusy=false,smartJob=0;
+function smartCurrentUser(){try{return JSON.stringify([String(curName()),isAdmin(),...['money','balances','reports','cost','warehouse','purchase'].map(k=>can(k)),routeAllowed('products')]);}catch(_){return null;}}
+function smartResetForUser(){const u=smartCurrentUser();if(smartTalkUser!==u){smartJob++;smartBusy=false;smartTalkUser=u;smartTalk=[];smartContext={};}}
+function pageSmartAssistant(){
+ smartResetForUser();
+ const examples=['دیروز چقدر فروش داشتیم؟','این ماه چقدر سود داشتیم؟','چک های ۷ روز آینده','اولویت وصول مطالبات','پیش بینی نقدینگی ۷ روز آینده','کالاهای راکد','آیا ثبت تکراری داریم؟','رأس‌گیری چک‌ها','محاسبه سود معامله','ارزش انبار'];
+ const history=smartTalk.length?smartTalk.map(m=>'<div class="fq-msg '+(m.role==='user'?'fq-user':'fq-bot')+'"><div>'+esc(m.text)+'</div>'+(m.source?'<small class="hint">'+esc(m.source)+'</small>':'')+(m.details?.length?'<ul>'+m.details.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+(m.actions?.length?'<div class="chips wrap">'+m.actions.map(x=>'<button type="button" class="chip" data-act="go" data-h="'+esc(x.route)+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+'</div>').join(''):'<div class="hint center">سؤال خود را درباره اطلاعات ثبت‌شده بپرسید. پاسخ‌ها از موتور حسابداری محاسبه می‌شوند.</div>';
+ const html='<section class="ui20-chat"><div class="ui20-scroll"><div class="ui2-chat-head"><div class="ch">'+ico('chat')+'دستیار حسابداری</div><button type="button" class="lnk" id="fq-chat-reset">'+ico('plus')+'گفت‌وگوی جدید</button></div>'+
+ '<details class="ui2-chat-intro"><summary>راهنمای دستیار · آفلاین</summary><p class="hint">این دستیار فقط گزارش‌های محاسباتی و خواندنی را ارائه می‌کند. هیچ سندی ثبت یا اطلاعاتی ارسال نمی‌شود.</p></details>'+
+ '<div id="fq-chat-history" class="fq-chat-history" aria-live="polite">'+history+'</div>'+
+ (smartTalk.length?'':'<details class="ui20-examples"><summary>نمونه سؤال‌ها</summary><div class="chips wrap ui2-chat-examples">'+examples.map(x=>'<button type="button" class="chip" data-act="fqChatExample" data-q="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div></details>')+'</div>'+
+ '<form id="fq-chat-form" class="card ui2-chat-compose"><textarea id="fq-chat-input" class="inp" rows="1" maxlength="1800" aria-label="سؤال جدید" placeholder="سؤال خود را بنویسید…" required></textarea><button class="btn blue" type="submit" aria-label="ارسال سؤال"'+(smartBusy?' disabled':'')+'>'+ico('send')+'</button></form></section>';
+ return {title:'دستیار حسابداری',html,back:'#/home',mount:()=>{
+  $('#fq-chat-form').onsubmit=e=>{e.preventDefault();smartAskQuestion($('#fq-chat-input').value);};
+  $('#fq-chat-reset').onclick=()=>{smartJob++;smartBusy=false;smartTalk=[];smartContext={};render();};
+  const b=$('.ui20-scroll');if(b&&smartTalk.length)b.scrollTop=b.scrollHeight;
+ }};
 }
 async function smartAskQuestion(text){
-  smartResetForUser();const q=String(text||'').trim();if(!q||aiBusy||aiListening||aiCheckingQuestion||location.hash.split('?')[0]!=='#/assistant')return;
-  if(!aiReportChatAllowed()){aiLockChat();return;}
-  const deep=smartDeep,authOwner=smartCurrentUser(),authJob=aiJob;
-  if(deep){
-   aiCheckingQuestion=true;let current;try{current=await aiReadStatus();}finally{aiCheckingQuestion=false;}
-   if(authOwner!==smartCurrentUser()||authJob!==aiJob||location.hash.split('?')[0]!=='#/assistant'||!aiReportChatAllowed())return;
-   if(current?.busy){toast('موتور هنوز مشغول تحلیل قبلی است.',true);return;}
-   if(!aiReady()){toast('برای تحلیل اختیاری ابتدا مدل را نصب کنید.',true);aiOpenAddon();return;}
-   aiSetEnabled(true);if(!aiChatAllowed())return;
-  }
-
-  const permissions=()=>({reports:can('reports'),balances:can('balances'),cost:can('cost'),money:can('money'),warehouse:routeAllowed('products')});
-  const opts=()=>({today:today(),allow:permissions()});
-  const history=smartTalk.slice(-8),context=smartContext,owner=smartCurrentUser(),job=++aiJob;
-  const auth=JSON.stringify(permissions()),valid=()=>job===aiJob&&owner===smartCurrentUser()&&location.hash.split('?')[0]==='#/assistant'&&aiReportChatAllowed()&&(!deep||aiChatAllowed())&&JSON.stringify(permissions())===auth;
-  smartTalk.push({role:'user',text:q});aiBusy=true;render();if(deep)aiWatchProgress(job);let out;
-  try{out=await FQOrchestrator.runSmart(q,history,context,{
-    valid,permissions,today,
-    generate:async(prompt,maxTokens)=>{if(!valid())throw Error('دسترسی تغییر کرده است');const p=FQAI.plugin();const r=await p.generate({prompt,maxTokens});if(!valid())throw Error('تحلیل متوقف شد');return r.text;},
-    read:x=>Core.smartAssistant.structuredRead(S,x,opts()),
-    stock:()=>{const a=permissions();if(!a.warehouse||!a.reports||!a.cost)throw Error('مجوز انبار فعال نیست.');return Core.stockInsights(S,today());},
-    finance:(x,c,force)=>Core.financeScenario.ask(x,c,{...opts(),force:!!force}),
-    weighted:(x,c,force)=>Core.chequeAssistant.weightedAsk(x,c,{...opts(),force:!!force})
-  },deep);}catch(e){out={text:deep?'اجرای مدل محلی کامل نشد؛ هیچ پاسخ مالی حدسی تولید نشد.':'گزارش کامل نشد؛ هیچ مبلغ حدسی تولید نشد.',ctx:context,details:[aiError(e)],actions:[],source:deep?'خطای اجرای Qwen':'خطای گزارش'};}
-  finally{if(job===aiJob)aiBusy=false;}
-  if(!valid()){if(job===aiJob&&owner===smartCurrentUser()&&location.hash.split('?')[0]==='#/assistant')render();return;}
-  smartDeep=false;smartContext=out.ctx||{};smartTalk.push({role:'assistant',text:out.text,details:out.details,actions:out.actions,source:out.source||'وضعیت دستیار'});
-  smartTalk=smartTalk.slice(-16);render();
+ smartResetForUser();const q=String(text||'').trim(),owner=smartCurrentUser();if(!q||!owner||smartBusy||location.hash.split('?')[0]!=='#/assistant')return;
+ const permissions=()=>({reports:can('reports'),balances:can('balances'),cost:can('cost'),money:can('money'),warehouse:routeAllowed('products')});
+ const opts=()=>({today:today(),allow:permissions()});
+ const context=smartContext,job=++smartJob,auth=JSON.stringify(permissions()),valid=()=>job===smartJob&&owner===smartCurrentUser()&&location.hash.split('?')[0]==='#/assistant'&&JSON.stringify(permissions())===auth;
+ smartBusy=true;smartTalk.push({role:'user',text:q});let out;
+ try{out=await FQReports.runSmart(q,context,{valid,permissions,today,read:x=>Core.smartAssistant.structuredRead(S,x,opts()),stock:()=>{const a=permissions();if(!a.warehouse||!a.reports||!a.cost)throw Error('مجوز انبار فعال نیست.');return Core.stockInsights(S,today());},finance:(x,c)=>Core.financeScenario.ask(x,c,opts()),weighted:(x,c)=>Core.chequeAssistant.weightedAsk(x,c,opts())});}
+ catch(e){out={text:'گزارش کامل نشد؛ هیچ مبلغ حدسی تولید نشد.',ctx:context,details:[String(e?.message||e)],actions:[],source:'خطای گزارش'};}
+ finally{if(job===smartJob)smartBusy=false;}
+ if(!valid())return;
+ smartContext=out.ctx||{};smartTalk.push({role:'assistant',text:out.text,details:out.details,actions:out.actions,source:out.source||'دستیار حسابداری'});smartTalk=smartTalk.slice(-16);render();
 }
+if(typeof window!=='undefined')window.addEventListener('hashchange',()=>{if(location.hash.split('?')[0]!=='#/assistant'){smartJob++;smartBusy=false;smartTalk=[];smartContext={};}});
 
 async function smartGuardConfirm(kind, candidate, editId){
   const issues=Core.smartGuard.preflight(S,kind,candidate,{editingId:editId||null,today:today()});

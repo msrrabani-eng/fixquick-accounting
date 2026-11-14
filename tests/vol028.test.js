@@ -1,0 +1,43 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const C=require('../www/core.js');require('../www/smartguard.js');
+const A=require('../www/assistant-brain.js'),O=require('../www/report-assistant.js');
+C.setUnit('rial');
+const today='2026-11-14',st=C.emptyState(),p=C.addPerson(st,{name:'علی رضایی'}).person,g=C.addProduct(st,{name:'کابل نمونه'}).product;
+let id=100;const doc=(date,qty,price)=>st.invoices.push({id:id++,type:'sale',date,personId:p.id,items:[{productId:g.id,qty,price}],discount:0,vatRate:0});
+doc('2026-11-12',2,150);doc('2026-11-13',4,200);doc(today,3,300);
+st.tx.push({id:id++,personId:p.id,date:today,kind:'debit',type:'sale',amount:1200});
+st.cheques.push({id:id++,kind:'cheque',direction:'receive',cyc:true,state:'box',amount:300,dueDate:C.addDays(today,2),personId:p.id,done:false},{id:id++,kind:'cheque',direction:'pay',cyc:true,state:'issued',amount:500,dueDate:C.addDays(today,3),personId:p.id,done:false});
+const snapshot=JSON.stringify(st);
+let allow={reports:true,money:true,cost:true,balances:true,warehouse:true},alive=true,reads=[];
+const h={today:()=>today,valid:()=>alive,permissions:()=>allow,read:r=>{reads.push(r);return A.structuredRead(st,r,{today,allow});},stock:()=>C.stockInsights(st,today)};
+async function run(q,c={}){reads=[];return O.runSmart(q,c,h);}
+(async()=>{
+ let r=await run('دیروز چقدر فروش داشتیم');assert.equal(r.data.value,800);let ctx=r.ctx;
+ r=await run('پریروز چی',ctx);assert.equal(r.data.value,300);assert.equal(reads[0].from,'2026-11-12');
+ r=await run('امروز چی؟',r.ctx);assert.equal(r.data.value,900);
+ r=await run('پریروز چی؟');assert.equal(r.data.kind,'clarify');assert.equal(reads.length,0);
+ r=await run('تو چه کمکی به من میتونی انجام بدی');assert.equal(r.data.kind,'help');
+ r=await run('سلام');assert.match(r.text,/سلام/);
+ r=await run('مانده حساب علی رضایی');assert.equal(r.data.value,1200);
+ r=await run('اولویت وصول مطالبات');assert.equal(r.data.value,1200);
+ r=await run('چک های ۷ روز آینده');assert.equal(r.data.value,800);
+ r=await run('پیش بینی نقدینگی ۷ روز آینده');assert.equal(r.data.kind,'cash-scenario');assert.equal(reads.length,2);
+ r=await run('کالاهای راکد');assert.equal(r.data.kind,'stock-insight');
+ r=await run('چرا فروش کم شد؟');assert.equal(r.data.kind,'clarify');assert.equal(reads.length,0);
+ allow.reports=false;r=await run('پریروز چی',ctx);assert.equal(r.data.kind,'denied');assert.equal(reads.length,0);
+ allow.reports=true;allow.money=false;r=await run('پیش بینی نقدینگی ۷ روز آینده');assert.equal(r.data.kind,'denied');assert.equal(reads.length,0);allow.money=true;
+ allow.balances=false;r=await run('مانده حساب علی رضایی');assert.equal(r.data.kind,'denied');assert.equal(reads.length,0);allow.balances=true;
+ alive=false;await assert.rejects(run('دیروز چقدر فروش داشتیم'),/دسترسی/);alive=true;
+ assert.equal(JSON.stringify(st),snapshot);
+ const ui=fs.readFileSync('www/smart-ui.js','utf8');
+ const sandbox=vm.createContext({console,curName:()=> 'owner',isAdmin:()=>true,can:()=>true,routeAllowed:()=>true});
+ vm.runInContext(ui,sandbox);vm.runInContext("smartResetForUser();smartContext={lastReport:{metric:'sales'}};smartTalk=[{text:'private'}]",sandbox);
+ sandbox.curName=()=> 'other';vm.runInContext('smartResetForUser()',sandbox);assert.equal(vm.runInContext('smartTalk.length',sandbox),0);assert.equal(vm.runInContext('Object.keys(smartContext).length',sandbox),0);
+ assert.ok(ui.includes('FQReports.runSmart'));
+ for(const path of ['www/ai-addon.js','www/ai-orchestrator.js','native-ai','tools/install_local_ai.py'])assert.equal(fs.existsSync(path),false,path);
+ for(const path of ['www/index.html','www/sw.js','www/pages.js','www/smart-ui.js','www/report-assistant.js','.github/workflows/build-apk.yml'])assert.doesNotMatch(fs.readFileSync(path,'utf8'),/Qwen|FQAI|FQOrchestrator|ai-addon\.js|ai-orchestrator\.js|install_local_ai|RECORD_AUDIO|llama\.cpp|nativeGenerate/i,path);
+ const m=fs.readFileSync('migration/RetiredStorageCleanup.java','utf8');assert.match(m,/Qwen3-4B-Q4_K_M\.gguf/);assert.match(m,/getSharedPreferences\("fq_ai_model_v1"/);assert.match(m,/dm\.remove\(id\)/);assert.doesNotMatch(m,/deleteRecursively|clearApplicationUserData|deleteDatabase/);
+ console.log('v028: local reports, follow-up dates, permissions, isolation and removed inference components passed');
+
+})().catch(e=>{console.error(e);process.exitCode=1;});

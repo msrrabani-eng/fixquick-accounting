@@ -1,2 +1,0 @@
-# v027 / 1.58 — specialist local-first assistant
-Default fast mode uses typed and permission-gated local reports. Explicit Qwen mode retains original inference and installed model; no claim of improved native speed. Follow-up scope stays in session only and is reset with user/permission changes. Cash scenario covers registered open cheque/installment maturities only, not full forecast; priority is by largest outstanding balance, not probability of collection. Stale stock is 60-day existing engine. No ledger writes. Device timing remains unverified.

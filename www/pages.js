@@ -25,7 +25,7 @@ function pageHome() {
   if (S.settings.auditIssues > 0 && isAdmin()) h += '<div class="alert warn">' + ico('alert') + 'بررسی خودکار هفتگی ' + fa(S.settings.auditIssues) + ' ناهماهنگی در اطلاعات پیدا کرد. <button class="lnk" data-act="audit">جزئیات</button></div>';
   if (can('backup') && hasData && (days === null || days > 7)) h += '<div class="alert warn">' + ico('save') + (days === null ? 'هنوز پشتیبان نگرفته‌اید.' : 'آخرین پشتیبان ' + fa(days) + ' روز پیش بوده.') + ' <button class="lnk" data-act="saveLocal">ذخیره کن</button></div>';
   h += '<button class="gsbar" data-act="go" data-h="#/search">' + ico('search') + '<span>جستجو یا سؤال: «آیفون ۱۶ از کی خریدیم»…</span></button>';
-  h += '<div class="row2 fq-smart-actions"><button class="btn ghost ai20-home" data-act="aiLaunch" aria-label="دستیار هوشمند؛ نصب یا ورود">' + ico('chat') + 'دستیار هوشمند</button>' + (can('reports') ? '<button class="btn ghost" data-act="go" data-h="#/safety">' + ico('shield') + 'کنترل خطا</button>' : '') + '</div>';
+  h += '<div class="row2 fq-smart-actions"><button class="btn ghost" data-act="go" data-h="#/assistant" aria-label="دستیار حسابداری">' + ico('chat') + 'دستیار حسابداری</button>' + (can('reports') ? '<button class="btn ghost" data-act="go" data-h="#/safety">' + ico('shield') + 'کنترل خطا</button>' : '') + '</div>';
   // one tap to every everyday job
   const big = [[true, 'newInv', 'sale', 'receipt', 'فروش', 'green'], [can('purchase'), 'newInv', 'purchase', 'cart', 'خرید', 'blue']].filter(x => x[0]);
   const small = [[can('money'), 'quickTx', 'receipt', 'in', 'دریافت'], [can('money'), 'quickTx', 'payment', 'out', 'پرداخت'], [can('money') && feat('cheques'), 'addCheque', '', 'cheque', 'ثبت چک'], [can('money') && feat('cheques'), 'spendChequeHome', '', 'cheque', 'خرج چک'], [can('money') && feat('transfer'), 'transfer', '', 'transfer', 'حواله'], [can('money') && feat('expenses'), 'addExpense', '', 'wallet', 'هزینه'], [true, 'newInv', 'sale_return', 'ret', 'برگشتی']].filter(x => x[0]);
@@ -747,7 +747,7 @@ function pageSettings(section) {
   if (can('backup')) h += '<div class="card"><div class="ch">' + ico('save') + 'پشتیبان‌گیری</div><p class="hint">' + (days === null ? 'هنوز پشتیبان نگرفته‌اید.' : 'آخرین پشتیبان: ' + fmtDate(S.settings.lastBackup) + ' (' + fa(days) + ' روز پیش)') + '</p><details class="backup019-note"><summary>نکات نگهداری امن فایل</summary><p class="hint">اطلاعات فقط روی همین گوشی است. با حذف برنامه یا پاک‌کردن اطلاعات مرورگر از بین می‌رود؛ پس مرتب پشتیبان بگیرید و فایل را برای خودتان (مثلاً تلگرام/Drive) بفرستید.</p></details><button class="btn green" data-act="saveLocal">' + ico('save') + 'ذخیره اطلاعات</button><p class="hint center">' + (fsP() ? 'مسیر ذخیره: ' + (S.settings.lastSave ? saveWhere(S.settings.lastSave.where) : saveWhere('DOCUMENTS')) + (S.settings.lastSave ? ' · آخرین ذخیره: ' + fmtDate(Core.todayISO(new Date(S.settings.lastSave.at))) : '') : 'در مرورگر، فایل در پوشه Downloads ذخیره می‌شود.') + '</p><div class="row2"><button class="btn blue" data-act="backup">' + ico('share') + 'ارسال فایل</button><button class="btn ghost" data-act="restore">بازیابی از فایل</button></div><input type="file" id="restore-file" accept=".json,application/json" hidden></div>';
   if (can('backup')) h += autoBackupCard();
   next('backup','پشتیبان‌گیری و بازیابی','save',days === null ? 'هنوز پشتیبان نگرفته‌اید' : 'آخرین پشتیبان: ' + fa(days) + ' روز پیش');
-  if (isAdmin()) h += ui2SettingsCard() + aiSourceSettingsCard();
+  if (isAdmin()) h += ui2SettingsCard();
   next('advanced','فاکتورها و هوش مصنوعی','settings','نمایش فاکتورها و منبع مدل');
   const au = S.settings.auth || {};
   if (isAdmin()) {
@@ -766,7 +766,7 @@ function pageSettings(section) {
   if (isAdmin()) h += '<div class="card"><div class="ch">' + ico('alert') + 'حذف همه اطلاعات</div><button class="btn red" data-act="wipe">پاک‌کردن کامل برنامه</button></div>';
   next('danger','عملیات حساس','alert','خام کردن یا حذف اطلاعات');
   h += '<p class="hint center">تعداد: ' + fa(S.people.length) + ' شخص · ' + fa(S.products.length) + ' کالا · ' + fa(S.invoices.length) + ' فاکتور · ' + fa(S.tx.length) + ' تراکنش</p>';
-  return { title: section === 'backup' ? 'پشتیبان‌گیری' : 'تنظیمات', html: '<div class="menu019 settings019' + (section === 'backup' ? ' backup019-page' : '') + '">' + groups + h + '</div>', back: '#/more', mount: () => { bindLockCard(); aiBindSourceSettings(); if ($('#setf')) $('#setf').onsubmit = async e => { e.preventDefault(); const f = e.target, oc = S.settings.openingCash || 0; const vr = Core.parseNum(f.vatRate.value || '0'); if (isNaN(vr) || vr < 0 || vr > 100) return toast('درصد ارزش افزوده نامعتبر است.', true); S.settings.business = f.business.value.trim(); S.settings.openingCash = oc; S.settings.vatRate = vr; S.settings.fyMonth = +f.fyMonth.value || 1; const mm = Core.parseNum(f.minMargin.value || '0'); if (!isNaN(mm) && mm >= 0 && mm <= 100) S.settings.minMargin = mm; await save(); toast('ذخیره شد.'); render(); }; if ($('#restore-file')) $('#restore-file').onchange = restoreFile; if ($('#usf')) $('#usf').onsubmit = saveUserSettings; } };
+  return { title: section === 'backup' ? 'پشتیبان‌گیری' : 'تنظیمات', html: '<div class="menu019 settings019' + (section === 'backup' ? ' backup019-page' : '') + '">' + groups + h + '</div>', back: '#/more', mount: () => { bindLockCard(); if ($('#setf')) $('#setf').onsubmit = async e => { e.preventDefault(); const f = e.target, oc = S.settings.openingCash || 0; const vr = Core.parseNum(f.vatRate.value || '0'); if (isNaN(vr) || vr < 0 || vr > 100) return toast('درصد ارزش افزوده نامعتبر است.', true); S.settings.business = f.business.value.trim(); S.settings.openingCash = oc; S.settings.vatRate = vr; S.settings.fyMonth = +f.fyMonth.value || 1; const mm = Core.parseNum(f.minMargin.value || '0'); if (!isNaN(mm) && mm >= 0 && mm <= 100) S.settings.minMargin = mm; await save(); toast('ذخیره شد.'); render(); }; if ($('#restore-file')) $('#restore-file').onchange = restoreFile; if ($('#usf')) $('#usf').onsubmit = saveUserSettings; } };
 }
 async function doBackup(noRender) { const ok = await exportFile('fixquick-backup-' + stamp() + '.json', Core.exportJSON(S), 'application/json'); if (ok) { S.settings.lastBackup = today(); S.settings.lastBackupAt = Date.now(); await save(); toast('پشتیبان آماده شد.'); if (!noRender) render(); } return !!ok; }
 const hasDocs = () => S.invoices.length + S.tx.length + S.expenses.length + S.cheques.length + S.adjusts.length > 0;
@@ -845,7 +845,6 @@ function setPin() {
 
 /* ─────────── actions ─────────── */
 const actions = {
-  aiLaunch: () => aiLaunch(),
   fqChatExample: d => smartAskQuestion(d.q),
   go: d => { goHash(d.h); },
   chip: d => { UI[d.k] = d.v; if (d.k === 'prodCat') UI.limProd = 100; if (d.k === 'repTab' || d.k === 'rep') UI.limRep = 60; if (d.k === 'rep' && d.v === 'custom' && !UI.repFrom) { UI.repFrom = Core.periodRange('month').from; UI.repTo = today(); } render(); },

@@ -38,18 +38,10 @@ jobs:
           node tests/vol016.test.js
           node tests/vol017.test.js
           node tests/finance017.test.js
-          node tests/vol018.test.js
           node tests/vol019.test.js
           node tests/vol020.test.js
-          node tests/vol021.test.js
           node tests/vol022.test.js
-          node tests/vol023.test.js
-          node tests/vol024.test.js
-          node tests/vol025.test.js
-          node tests/vol026.test.js
-          node tests/vol027.test.js
-          javac -d /tmp/fq-ai-policy native-ai/AiMemoryPolicy.java tests/AiMemoryPolicyTest.java
-          java -cp /tmp/fq-ai-policy ir.fixquick.accounting.AiMemoryPolicyTest
+          node tests/vol028.test.js
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |
@@ -99,17 +91,8 @@ jobs:
         with:
           packages: 'platform-tools'
 
-      - name: Prepare optional native local AI engine
-        run: |
-          SDKMANAGER="$(command -v sdkmanager || true)"
-          if [ -z "$SDKMANAGER" ]; then
-            SDKMANAGER="$(find "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}/cmdline-tools" -type f -name sdkmanager | sort -V | tail -1)"
-          fi
-          test -x "$SDKMANAGER"
-          "$SDKMANAGER" --install "ndk;27.2.12479018" "cmake;3.22.1"
-          test -f "$ANDROID_HOME/ndk/27.2.12479018/source.properties"
-          test -x "$ANDROID_HOME/cmake/3.22.1/bin/cmake"
-          python3 tools/install_local_ai.py
+      - name: Prepare one-time storage cleanup on update
+        run: python3 tools/install_storage_cleanup.py
 
       - name: Use the fixed signing key (so updates install over the old version)
         env:
@@ -138,25 +121,6 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
-
-      - name: Verify optimized ARM64 inference compiler flags
-        run: |
-          python3 - <<'PY'
-          import json, pathlib, re, shlex
-          found = set()
-          for path in pathlib.Path('android/app/.cxx').rglob('compile_commands.json'):
-              for entry in json.loads(path.read_text()):
-                  file = entry['file'].replace('\\', '/')
-                  args = entry.get('arguments') or shlex.split(entry['command'])
-                  if not any('aarch64' in a or 'arm64-v8a' in a for a in args): continue
-                  part = 'bridge' if file.endswith('/fq-ai/bridge.cpp') else 'cpu' if '/ggml-cpu/' in file else None
-                  if not part: continue
-                  flags = [a for a in args if re.fullmatch(r'-O(?:[0-3sgz]|fast)?', a)]
-                  assert flags and flags[-1] in ('-O3', '-Ofast'), (file, flags)
-                  found.add(part)
-          assert found == {'bridge', 'cpu'}, ('Missing ARM64 compilation records', found)
-          print('Verified optimized ARM64 bridge and ggml CPU kernels')
-          PY
 
       - name: Collect APK
         run: cp android/app/build/outputs/apk/debug/app-debug.apk FixQuick-Accounting.apk
