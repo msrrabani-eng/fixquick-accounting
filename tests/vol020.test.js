@@ -9,7 +9,7 @@ for(const status of ['notInstalled','downloading','paused','verifying','failed',
 run(`aiStatus={status:'ready',runtime:true,compatible:true}`);assert.equal(run('aiChatAllowed()'),true);
 for(const s of [`aiStatus.runtime=false`,`aiStatus.compatible=false`,`aiChatOwner='other'`,`Capacitor.Plugins={}`]){run(`aiStatus={status:'ready',runtime:true,compatible:true};aiChatOwner='owner';Capacitor.Plugins={FixQuickAI:{}};${s}`);assert.equal(run('!!aiChatAllowed()'),false,s);}
 const pages=read('www/pages.js'),ui=read('www/smart-ui.js'),css=read('www/ui2.css');assert.equal((pages.match(/data-act="aiLaunch"/g)||[]).length,1);assert.ok(!pages.includes("row('chat', 'دستیار هوشمند', '#/assistant')"));assert.ok(ui.includes('if(!aiChatAllowed())return'));assert.ok(ui.includes('await aiReadStatus()'));assert.ok(ui.includes('ui20-scroll'));assert.ok(css.includes('grid-template-rows:minmax(0,1fr) auto'));assert.ok(css.includes('.ui20-chat .ui2-chat-compose{position:static'));
-assert.match(read('www/sw.js'),/vol02[01]/);assert.match(read('www/diag.js'),/APP_VER = '1\.5[12]'/);assert.ok(read('.github/workflows/build-apk.yml').includes('node tests/vol020.test.js'));
+assert.match(read('www/sw.js'),/vol02[0123]/);assert.match(read('www/diag.js'),/APP_VER = '1\.5[1234]'/);assert.ok(read('.github/workflows/build-apk.yml').includes('node tests/vol020.test.js'));
 console.log('v020: readiness gate, stale opt-in, user isolation, home-only entry, bounded chat layout and build wiring passed');
 
 // Stock toolbar: expanding the disclosure must not squeeze the five actions into its closed width.

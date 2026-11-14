@@ -32,7 +32,7 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_ir_fixquick_accounting_LocalAIPlugi
         limit=std::clamp(limit,16,768);
         const int cap=context_limit>=4096?4096:2048;
         if(n<=0||n+limit>=cap)throw std::runtime_error("Conversation too long for available memory; start a new conversation");
-        const int needed=std::max(1024,((n+limit+512)/512)*512);
+        const int needed=std::min(cap,std::max(1024,((n+limit+511)/512)*512));
         auto cp=llama_context_default_params(); cp.n_ctx=needed; cp.n_batch=128; cp.n_ubatch=64; cp.n_threads=std::clamp((int)threads,1,6); cp.n_threads_batch=cp.n_threads; cp.abort_callback=abort_decode;
         std::unique_ptr<llama_context,decltype(&llama_free)> ctx(llama_init_from_model(model.get(),cp),llama_free);
         if(!ctx)throw std::runtime_error("Not enough RAM for inference context");

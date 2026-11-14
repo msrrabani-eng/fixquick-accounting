@@ -1,16 +1,16 @@
 /* Fix Quick v014 — read-only review dialogs and offline conversational UI. */
 'use strict';
 let smartTalk = [], smartContext = {}, smartTalkUser = null;
-function smartCurrentUser() { try { return typeof curName === 'function' ? String(curName()) : 'owner'; } catch (_) { return 'owner'; } }
+function smartCurrentUser() { try { return typeof curName === 'function' ? JSON.stringify([String(curName()),isAdmin(),...['money','balances','reports','cost','warehouse','purchase'].map(k=>can(k)),routeAllowed('products')]) : 'owner'; } catch (_) { return 'owner'; } }
 function smartResetForUser() { const u=smartCurrentUser(); if(smartTalkUser!==u){ aiCancel(); smartTalkUser=u; smartTalk=[]; smartContext={}; } }
 function pageSmartAssistant() {
   smartResetForUser();
   if(!aiChatAllowed())return {title:'دستیار هوشمند',back:'#/home',html:'<div class="card ai20-locked"><div class="ch">'+ico('lock')+'دستیار هنوز آماده نیست</div><p>برای استفاده، ابتدا مدل هوش مصنوعی را از آیکون دستیار در صفحه اصلی نصب و فعال کنید.</p><button class="btn blue" data-act="go" data-h="#/home">بازگشت به خانه</button></div>'};
-  const examples=['محاسبه سود معامله','بیشترین کارکردمون با کی بوده؟','فروش این ماه چقدر بوده؟','چک‌های سررسید ۷ روز آینده','آیا ثبت تکراری داریم؟','سود ماه قبل چقدر بوده؟','بیشترین خرید از کی بوده؟','مانده حساب یک مشتری','پرفروش‌ترین کالا از نظر تعداد چیه؟'];
-  const history=smartTalk.length ? smartTalk.map(m => '<div class="fq-msg '+(m.role==='user'?'fq-user':'fq-bot')+'"><div>'+esc(m.text)+'</div>'+(m.details&&m.details.length?'<ul>'+m.details.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+(m.actions&&m.actions.length?'<div class="chips wrap">'+m.actions.map(x=>'<button type="button" class="chip" data-act="go" data-h="'+esc(x.route)+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+'</div>').join('') : '<div class="hint center">سؤالتان را درباره اطلاعات ثبت‌شده بپرسید. اعداد واقعی از داده‌های همین برنامه محاسبه می‌شوند؛ راهنمای عمومی مدل نیاز به بررسی دارد.</div>';
+  const examples=['محاسبه سود معامله','بیشترین کارکردمون با کی بوده؟','فروش این ماه چقدر بوده؟','چک‌های سررسید ۷ روز آینده','رأس‌گیری چک‌ها','آیا ثبت تکراری داریم؟','سود ماه قبل چقدر بوده؟','بیشترین خرید از کی بوده؟','مانده حساب یک مشتری','پرفروش‌ترین کالا از نظر تعداد چیه؟'];
+  const history=smartTalk.length ? smartTalk.map(m => '<div class="fq-msg '+(m.role==='user'?'fq-user':'fq-bot')+'"><div>'+esc(m.text)+'</div>'+(m.source?'<small class="hint">'+esc(m.source)+'</small>':'')+(m.details&&m.details.length?'<ul>'+m.details.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+(m.actions&&m.actions.length?'<div class="chips wrap">'+m.actions.map(x=>'<button type="button" class="chip" data-act="go" data-h="'+esc(x.route)+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+'</div>').join('') : '<div class="hint center">سؤالتان را درباره اطلاعات ثبت‌شده بپرسید. اعداد واقعی از داده‌های همین برنامه محاسبه می‌شوند؛ راهنمای عمومی مدل نیاز به بررسی دارد.</div>';
   const h='<section class="ui20-chat"><div class="ui20-scroll"><div class="ui2-chat-head"><div class="ch">'+ico('chat')+'دستیار حسابداری</div><button type="button" class="lnk" id="fq-chat-reset">'+ico('plus')+'گفت‌وگوی جدید</button></div>'+
     '<div class="ui2-ai-tools"><button type="button" class="chip" id="fq-ai-addon">'+ico('settings')+'مدیریت افزونه</button><span id="fq-ai-tag" class="hint">مدل محلی نصب شده</span><button type="button" class="chip" id="fq-ai-speak">خواندن پاسخ</button></div>'+
-    '<details class="ui2-chat-intro"><summary>راهنمای دستیار · آفلاین</summary><p class="hint">تحلیل آفلاین گردش، فروش، خرید، سود، هزینه، موجودی، چک و مانده حساب؛ سؤال‌های مبهم نیاز به توضیح دارند. اطلاعاتی ارسال یا ثبت نمی‌شود.</p></details>'+
+    '<details class="ui2-chat-intro"><summary>راهنمای دستیار · آفلاین</summary><p class="hint">Qwen ابتدا سؤال را تحلیل می‌کند؛ در صورت نیاز گزارش خواندنی برنامه را می‌خواند. مبالغ معتبر از موتور حسابداری می‌آیند. هیچ سندی ثبت و هیچ اطلاعاتی ارسال نمی‌شود.</p></details>'+
     '<div id="fq-chat-history" class="fq-chat-history" aria-live="polite">'+history+(aiBusy?'<div class="fq-msg fq-bot">در حال تحلیل محلی… <button type="button" id="fq-ai-cancel" class="lnk">توقف</button></div>':'')+'</div>'+
     (smartTalk.length?'':'<details class="ui20-examples"><summary>نمونه سؤال‌ها</summary><div class="chips wrap ui2-chat-examples">'+examples.map(x=>'<button type="button" class="chip" data-act="fqChatExample" data-q="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div></details>')+'</div>'+
     '<form id="fq-chat-form" class="card ui2-chat-compose"><textarea id="fq-chat-input" class="inp" rows="1" maxlength="1800" aria-label="سؤال جدید" placeholder="سؤال خود را بنویسید…" required></textarea><button class="btn ghost" type="button" id="fq-ai-mic" aria-label="گفتار فارسی">'+ico('mic')+'</button><button class="btn blue" type="submit" aria-label="ارسال سؤال"'+(aiBusy?' disabled':'')+'>'+ico('send')+'</button></form></section>';
@@ -19,7 +19,7 @@ function pageSmartAssistant() {
     $('#fq-chat-reset').onclick=()=>{aiCancel();smartTalk=[];smartContext={};render();};
     $('#fq-ai-addon').onclick=aiOpenAddon;$('#fq-ai-mic').onclick=aiVoiceInput;$('#fq-ai-speak').onclick=aiSpeakLast;
     const stop=$('#fq-ai-cancel');if(stop)stop.onclick=()=>{aiCancel();smartTalk.push({role:'assistant',text:'تحلیل متوقف شد.'});render();};
-    const tag=$('#fq-ai-tag');aiReadStatus().then(s=>{if(!tag?.isConnected)return;if(!aiChatAllowed()){aiLockChat();return;}tag.textContent=s.memoryReady===false?'مدل نصب‌شده · حافظه فعلاً محدود':'مدل محلی نصب‌شده';});
+    const tag=$('#fq-ai-tag');aiReadStatus().then(s=>{if(!tag?.isConnected)return;if(!aiChatAllowed()){aiLockChat();return;}tag.textContent=s.memoryReady===false?'مدل نصب‌شده · حافظه فعلاً محدود':'مدل Qwen نصب‌شده';});
     const b=$('.ui20-scroll');if(b&&smartTalk.length)b.scrollTop=b.scrollHeight;
   }};
 }
@@ -31,28 +31,24 @@ async function smartAskQuestion(text){
   if(authOwner!==smartCurrentUser()||authJob!==aiJob||location.hash.split('?')[0]!=='#/assistant')return;
   if(!aiChatAllowed()){aiLockChat();return;}
 
-  const opts={today:today(),allow:{reports:can('reports'),balances:can('balances'),cost:can('cost'),money:can('money'),warehouse:routeAllowed('products')}};
-  const history=smartTalk.slice(-4),context=smartContext,owner=smartCurrentUser();
-  const greeting=/^(?:سلام(?:\s+(?:عرض\s+ادب|علیکم|خسته\s+نباشید))?|درود|وقت\s+بخیر|صبح\s+بخیر|شب\s+بخیر)[\s!؟?،.]*$/u.test(q);
-  let out=greeting?{text:'سلام، خوش آمدید. می‌توانید درباره حساب اشخاص، سود و زیان، چک‌ها یا روش ثبت یک معامله سؤال کنید.',ctx:context,data:{kind:'greeting'},details:[],actions:[]}:Core.financeScenario.ask(q,context,opts)||Core.smartAssistant.ask(S,q,context,opts);
-  // Deterministic financial results and confirmations have priority. The optional model
-  // handles unsupported / unclear questions, not privileged writes or automatic confirmations.
-  const complex=/چطور|چگونه|چرا|روش ثبت|سند زدن|سند بزن|تحلیل|مشاوره|بهتره|بهتر است/.test(q);
-  const useAI=aiChatAllowed()&&(!out.data||['unsupported','clarify'].includes(out.data.kind)||complex&&out.data.kind!=='denied'&&!String(out.data.kind||'').startsWith('finance-'))&&!context.finance;
-  smartTalk.push({role:'user',text:q});
-  if(useAI){const job=++aiJob;aiBusy=true;render();try{
-    const modelOut=await aiAdvanced(q,history,opts);
-    if(job!==aiJob||owner!==smartCurrentUser())return;
-    // Re-read permissions after inference, rather than trusting an earlier permission snapshot.
-    const live={today:today(),allow:{reports:can('reports'),balances:can('balances'),cost:can('cost'),money:can('money'),warehouse:routeAllowed('products')}};
-    const interpreted=FQAI.route(modelOut,{query:x=>Core.smartAssistant.ask(S,x,{},live),finance:x=>Core.financeScenario.ask(x,{},live)});
-    if(interpreted)out=interpreted;
-  }catch(e){if(job!==aiJob||owner!==smartCurrentUser())return;out={...out,text:out.data?.kind==='unsupported'?'تحلیل هوش مصنوعی کامل نشد. مدل نصب‌شده را حذف نکنید؛ جزئیات خطا را بررسی کنید.':out.text,details:[...(out.details||[]),'مدل محلی پاسخ نداد: '+aiError(e)]};}
+  const permissions=()=>({reports:can('reports'),balances:can('balances'),cost:can('cost'),money:can('money'),warehouse:routeAllowed('products')});
+  const opts=()=>({today:today(),allow:permissions()});
+  const history=smartTalk.slice(-8),context=smartContext,owner=smartCurrentUser(),job=++aiJob;
+  const auth=JSON.stringify(permissions()),valid=()=>job===aiJob&&owner===smartCurrentUser()&&location.hash.split('?')[0]==='#/assistant'&&aiChatAllowed()&&JSON.stringify(permissions())===auth;
+  smartTalk.push({role:'user',text:q});aiBusy=true;render();let out;
+  try{out=await FQOrchestrator.run(q,history,context,{
+    valid,permissions,today,
+    generate:async(prompt,maxTokens)=>{if(!valid())throw Error('دسترسی تغییر کرده است');const p=FQAI.plugin();const r=await p.generate({prompt,maxTokens});if(!valid())throw Error('تحلیل متوقف شد');return r.text;},
+    read:x=>Core.smartAssistant.structuredRead(S,x,opts()),
+    finance:(x,c,force)=>Core.financeScenario.ask(x,c,{...opts(),force:!!force}),
+    weighted:(x,c,force)=>Core.chequeAssistant.weightedAsk(x,c,{...opts(),force:!!force})
+  });}catch(e){out={text:'اجرای مدل محلی کامل نشد؛ هیچ پاسخ مالی جایگزین تولید نشد.',ctx:{},details:[aiError(e)],actions:[],source:'خطای اجرای Qwen'};}
   finally{if(job===aiJob)aiBusy=false;}
-  if(job!==aiJob||owner!==smartCurrentUser())return;}
-  smartContext=out.ctx||{}; smartTalk.push({role:'assistant',text:out.text,details:out.details,actions:out.actions});
-  smartTalk=smartTalk.slice(-16);if(location.hash.split('?')[0]==='#/assistant')render();
+  if(!valid()){if(job===aiJob&&owner===smartCurrentUser()&&location.hash.split('?')[0]==='#/assistant')render();return;}
+  smartContext=out.ctx||{};smartTalk.push({role:'assistant',text:out.text,details:out.details,actions:out.actions,source:out.source||'وضعیت دستیار'});
+  smartTalk=smartTalk.slice(-16);render();
 }
+
 async function smartGuardConfirm(kind, candidate, editId){
   const issues=Core.smartGuard.preflight(S,kind,candidate,{editingId:editId||null,today:today()});
   if(!issues.length)return true;

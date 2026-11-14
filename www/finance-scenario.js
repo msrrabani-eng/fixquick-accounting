@@ -69,7 +69,7 @@ const moneyRe=phrase+'(?:\\s*(?:تومان|تومن|ریال))?';
 function capture(q,label){return first(q,new RegExp('(?<![\\p{L}\\d])(?:'+label+')(?![\\p{L}\\d])\\s*(?:[:=]|معادل|برابر|به مبلغ|به ارزش|مبلغ|ارزش|مجموعا|مجموع|جمع|جمعا|به میزان)?\\s*('+moneyRe+')(?![\\p{L}\\d])','u'));}
 function extract(text,state){const q=norm(text),d={...state};
  const units=[/(?:تومان|تومن)/.test(q),/ریال/.test(q)];if(units[0]!==units[1])d.unit=units[0]?'toman':'rial';
- const rem=capture(q,'مانده اصل(?: طلب| بدهی)?|باقی ?مانده اصل(?: طلب| بدهی)?|اصل باقی ?مانده');const total=capture(q,'اصل بدهی|کل بدهی|بدهی اولیه|اصل طلب|کل طلب|طلب اولیه');
+ const rem=capture(q,'مانده اصل(?: طلب| بدهی)?|باقی ?مانده اصل(?: طلب| بدهی)?|اصل باقی ?مانده');const total=capture(q.replace(/(?:باقی ?مانده|مانده) اصل(?: طلب| بدهی)?/g,'مانده'),'اصل بدهی|کل بدهی|بدهی اولیه|اصل طلب|کل طلب|طلب اولیه');
  if(rem!==null&&total===null){d.mode='remaining';d.principal=amount(rem,d.unit);}else if(total!==null&&rem===null){d.mode='original';d.principal=amount(total,d.unit);}
  for(const [key,label] of [['cash','نقد دریافتی|دریافت نقدی|نقد|وجه نقد'],['goods','ارزش توافقی کالا|ارزش کالا|ارزش جنس|جنس دریافتی|جنس|کالای دریافتی|کالا'],['cheques','مجموع مبلغ چک(?: ها)?|مبلغ کل چک(?: ها)?|جمع چک(?: ها)?|مجموع چک(?: ها)?|چک(?: ها)? به مبلغ']]){const v=capture(q,label);if(v!==null)d[key]=amount(v,d.unit);}
  const backFields=[['cash','نقد(?:ی)?'],['goods','جنس|کالا']];for(const [key,label] of backFields){if(d[key]!==null)continue;const v=first(q,new RegExp('(?<![\\p{L}\\d])('+moneyRe+')\\s+(?:'+label+')(?:\\s|$|[،,.])','u'));if(v!==null)d[key]=amount(v,d.unit);}
@@ -83,7 +83,7 @@ function extract(text,state){const q=norm(text),d={...state};
 }
 function ask(question,ctx={},opts={}){
  const guide=ctx.financeResult&&/سند|ثبت|حسابداری|بدهکار.*بستانکار/.test(norm(question));
- if(!ctx.finance&&!intent(question)&&!guide)return null;
+ if(!opts.force&&!ctx.finance&&!intent(question)&&!guide)return null;
  if(opts.allow?.money===false)return {text:'مجوز تحلیل مالی برای این کاربر فعال نیست.',ctx:{},details:[],actions:[],data:{kind:'denied'}};
  if(guide)return {text:'پیشنهاد ثبت حسابداری برای سناریوی محاسبه‌شده (هیچ سندی ثبت نمی‌شود):',ctx,details:postingGuide(ctx.financeResult),actions:[],data:{kind:'finance-guide'}};
  const q=norm(question);if(/^(لغو محاسبه|پایان محاسبه|خروج از محاسبه)$/.test(q))return {text:'محاسبه فرضی پایان یافت. سؤال جدیدتان را بپرسید.',ctx:{},details:[],actions:[],data:{kind:'cancel'}};

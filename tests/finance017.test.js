@@ -32,5 +32,5 @@ a=F.ask('محاسبه سود معامله',{},opts);assert.equal(a.data.field,'m
 assert.equal(F.ask('بیشترین کارکردمون با کی بوده؟',{},opts),null);assert.equal(F.ask('سود این ماه چقدر بوده',{},opts),null);
 assert.equal(F.ask(scenario,{}, {allow:{money:false}}).data.kind,'denied');
 const ui=fs.readFileSync(require.resolve('../www/smart-ui.js'),'utf8'),html=fs.readFileSync(require.resolve('../www/index.html'),'utf8'),sw=fs.readFileSync(require.resolve('../www/sw.js'),'utf8');
-assert.ok(ui.includes('Core.financeScenario.ask(q,context,opts)||Core.smartAssistant.ask'));assert.ok(html.includes('finance-scenario.js')&&sw.includes('finance-scenario.js'));
+assert.ok(ui.includes('Core.financeScenario.ask(x,c,{...opts(),force:!!force})'));assert.ok(html.includes('finance-scenario.js')&&sw.includes('finance-scenario.js'));
 console.log('finance scenario: numeric parser, exact arithmetic, confirmation, missing fields, permission, posting guide, UI wiring passed');

@@ -2,6 +2,7 @@
 (function(root){
 'use strict';
 const C=typeof module!=='undefined'&&module.exports?require('./core.js'):root.Core;
+const Ch=typeof module!=='undefined'&&module.exports?require('./cheque-assistant.js'):C.chequeAssistant;
 const normalize=s=>C.norm(String(s||'').normalize('NFKC').replace(/[\u0640\u064b-\u065f\u0670]/g,'')).replace(/[؟?!،,.؛:«»]/g,' ').replace(/\s+/g,' ').trim();
 const money=n=>C.fmt(Math.round(n))+' '+C.unitName();
 const result=(text,ctx={},actions=[],details=[],data=null)=>({text,ctx,actions,details,data});
@@ -37,7 +38,9 @@ function ask(st,question,context={},opts={}){
   if(!q)return clarify('سؤال خود را بنویسید؛ مثلاً «بیشترین کارکرد با کی بوده؟»');
   // No mutations, forecasts, unrelated or compound questions pretending to be single metrics.
   if(/(?:^| )(حذف|پاک کن|ثبت کن|ثبتش کن|ویرایش کن|اضافه کن|تغییر بده|پیش بینی|پیشبینی|فردا چقدر میفروشیم)(?: |$)/.test(q))return search();
+  const weighted=Ch.weightedAsk(question,context,opts);if(weighted)return weighted;
     const people=entity(st.people,q,'person'),products=entity(st.products,q,'product');
+  const cheque=Ch.report(st,question,context,opts,people);if(cheque)return cheque;
   // Full entity names are not intent keywords (e.g. فروشگاه پارس is not فروش).
   for(const e of [...people,...products]){const n=normalize(e.name);if(whole(q,n))q=(' '+q+' ').replace(' '+n+' ',' ENTITY ').trim();}
   const explicit=period(q,today,context,st);
@@ -60,7 +63,7 @@ function ask(st,question,context={},opts={}){
   const receivable=/طلب|بدهکار|بدهی|بهمون بده|به ما بده|به من بده|از .* پول بگیر/.test(q);
   let metric='',mode='scalar',p=null,prod=null,direction='all',days=0;
   if(/خطا|ثبت تکراری|اشتباه ثبت|مغایرت/.test(q))metric='risk';
-  else if(/چک|سررسید|اقساط|قسط/.test(q)){metric='cheques';direction=/پرداختی|صادر|پاس کنیم|پاس بش|دادیم|دادنی/.test(q)?'pay':/دریافتی|گرفتیم|وصول|گرفتنی/.test(q)?'receive':'all';const m=q.match(/(\d+)\s*روز/);days=m?+m[1]:/فردا/.test(q)?1:0;if(days>365)return clarify('بازه چک را بین امروز و ۳۶۵ روز آینده مشخص کنید.');if(rank||profit||exp)return search();}
+
   else if(/موجودی (?:نقد|صندوق|بانک|حساب)|پول (?:نقد|توی صندوق|تو صندوق|تو بانک)|نقدینگی|جمع (?:بانک و صندوق|صندوق و بانک)/.test(q))metric='cash';
   else if(/ارزش (?:کل )?انبار|ارزش موجودی/.test(q))metric='inventory-value';
   else if(/موجودی|انبار/.test(q)&&!rank&&!sales&&!buys){metric='stock';mode='product';}
@@ -97,24 +100,24 @@ function ask(st,question,context={},opts={}){
     if((metric==='balance'||mode==='person'||monetaryPerson.includes(metric)&&(needsPerson||subjectCue)&&!p)&&!p)return clarify('نام شخص مشخص نیست. نام کامل شخص را بنویسید.');
     if(products.length&&['sales','purchases','profit','expense','invoice-count'].includes(metric))return clarify('برای این گزارش کالا، معیار دقیق را مشخص کنید؛ مبلغ، تعداد یا موجودی؟');
   }
+  const range=explicit||((follow||pronoun)&&context.range?context.range:null)||(mode==='rank'||mode==='person'||['balance','receivable','payable','turnover'].includes(metric)?allRange:defaultMonth);
+  return compute(st,{metric,mode,p,products,q,explicit,range,low:follow?!!context.low:low,direction,days},opts,today);
+}
+function compute(st,spec,opts,today){
+  let {metric,mode,p,products,q,explicit,low,direction,days}=spec,prod=null;const allow=opts.allow||{},can=k=>allow[k]!==false;
   const balanceMetrics=['balance','receivable','payable','turnover'];
   const access=metric==='risk'||['sales','purchases','profit','expense','invoice-count','sale-count','purchase-count','product-sales','product-qty'].includes(metric)?'reports':balanceMetrics.includes(metric)?'balances':['cash','receipts','payments','cheques'].includes(metric)?'money':'warehouse';
   if(!can(access)||(['profit','inventory-value'].includes(metric)&&!can('cost'))||((metric==='receipts'||metric==='payments')&&p&&!can('balances')))return denied();
   if(mode==='rank'&&metric.startsWith('product-')&&!can('warehouse'))return denied();
-  let range=explicit||((follow||pronoun)&&context.range?context.range:null)||(mode==='rank'||mode==='person'||balanceMetrics.includes(metric)?allRange:defaultMonth);
+  const range=spec.range;
   const inRange=d=>!!d&&(!range.from||d>=range.from)&&d<=range.to;
   const docs=(st.invoices||[]).filter(i=>inRange(i.date));
-  const ctx={metric,mode,range,personId:p?.id,direction,days,low:follow?!!context.low:low,intent:mode==='rank'?'ranking':metric};
+  const ctx={metric,mode,range,personId:p?.id,direction,days,low:!!low,intent:mode==='rank'?'ranking':metric};
   const label={sales:'فروش خالص',purchases:'خرید خالص',profit:'سود خالص',expense:'هزینه‌های ثبت‌شده',turnover:'گردش حساب',receivable:'طلب از اشخاص',payable:'بدهی به اشخاص','invoice-count':'تعداد فاکتورها','sale-count':'تعداد فاکتورهای فروش','purchase-count':'تعداد فاکتورهای خرید','product-sales':'فروش خالص کالا','product-qty':'تعداد خالص فروش کالا',receipts:'دریافت نقدی/بانکی ثبت‌شده در حساب اشخاص',payments:'پرداخت نقدی/بانکی ثبت‌شده در حساب اشخاص'}[metric];
   const countMetric=metric.endsWith('count')||metric==='product-qty';const fmt=v=>countMetric?C.fmtQty(v)+(metric==='product-qty'?' واحد':' فاکتور'):money(v);
   const routes=[{label:'گزارش‌های مالی',route:'#/reports'}];
   if(metric==='risk'){const r=C.smartGuard.scan(st,{today,max:8});return result(r.count?'در بررسی اولیه '+C.toFa(r.count)+' مورد مشکوک به ثبت تکراری پیدا شد؛ خطای قطعی نیست.':'در بررسی ثبت‌های تکراری مورد مشکوکی پیدا نشد.',ctx,[{label:'مشاهده جزئیات کنترل خطا',route:'#/safety'}],r.items.map(x=>x.message),{metric,value:r.count});}
-  if(metric==='cheques'){
-    if(explicit&&!/امروز/.test(q))return clarify('برای سررسیدهای باز، تعداد روز آینده یا «امروز» را مشخص کنید.');
-    const end=C.addDays(today,days),overdueOnly=/معوق|سررسید گذشته|عقب افتاده/.test(q);
-    const list=(st.cheques||[]).filter(c=>!c.done&&(!c.cyc||!c.state||['box','bank','issued'].includes(c.state))&&c.dueDate&&(overdueOnly?c.dueDate<today:c.dueDate<=end)&&(direction==='all'||c.direction===direction));
-    const value=list.reduce((v,c)=>v+c.amount,0);return result((overdueOnly?'معوقه‌ها':'تا '+C.toFa(days)+' روز آینده (شامل معوقه‌ها)')+'؛ '+(direction==='receive'?'دریافتی':direction==='pay'?'پرداختی':'دریافتی و پرداختی')+': '+C.toFa(list.length)+' چک/قسط تعیین‌تکلیف‌نشده با جمع '+money(value),ctx,[{label:'مشاهده چک‌ها',route:'#/cheques'}],list.slice(0,8).map(c=>(c.title||c.serial||'چک')+' — '+C.isoToJalali(c.dueDate)+' — '+money(c.amount)),{metric,value,count:list.length,direction});
-  }
+  if(metric==='cheques')return clarify('لطفاً نوع چک و تاریخ سررسید را دوباره مشخص کنید.');
   if(metric==='cash'||metric==='inventory-value'||metric==='stock'){
     if(explicit&&range.to!==today)return clarify('این گزارش فقط برای وضعیت فعلی در دسترس است.');
     if(metric==='cash'){if(/(?:بانک|صندوق)/.test(q)&&!(/بانک/.test(q)&&/صندوق/.test(q)))return clarify('جمع همه حساب‌ها و بانک‌ها را می‌خواهید یا فقط یک حساب مشخص؟ برای جزئیات از بخش صندوق و بانک استفاده کنید.');const source=Array.isArray(st.accounts)&&st.accounts.length?st:JSON.parse(JSON.stringify(st));const value=C.cashBalance(source);return result('موجودی ثبت‌شده صندوق و بانک: '+money(value),ctx,[{label:'صندوق و بانک',route:'#/accounts'}],[],{metric,value});}
@@ -135,18 +138,66 @@ function ask(st,question,context={},opts={}){
   if(mode==='rank'){
     const entities=new Map((metric.startsWith('product-')?st.products:st.people).map(x=>[x.id,x]));const rows=[...sums.values()].filter(x=>x.value>0&&entities.has(x.id)).sort((a,b)=>(ctx.low?a.value-b.value:b.value-a.value)||a.id-b.id);
     if(!rows.length)return result('برای '+label+' در '+range.label+' مورد مثبت ثبت نشده است.',ctx,[],[],{metric,mode,value:0,rows:[]});
-    const best=rows[0],ties=rows.filter(x=>x.value===best.value),n=Math.min(10,Math.max(1,Number((q.match(/(\d+)\s*(?:نفر|شخص|مشتری|کالا|مورد)/)||[])[1]||5))),name=x=>entities.get(x.id).name;
+    if(rows.some(x=>!Number.isFinite(x.value)||(!countMetric&&!Number.isSafeInteger(x.value))))return clarify('مبلغ خارج از محدوده محاسبه امن است.');
+    const best=rows[0],ties=rows.filter(x=>x.value===best.value),n=spec.limit||Math.min(10,Math.max(1,Number((q.match(/(\d+)\s*(?:نفر|شخص|مشتری|کالا|مورد)/)||[])[1]||5))),name=x=>entities.get(x.id).name;
     const title=(ctx.low?'کمترین':'بیشترین')+' '+label+' ('+range.label+') متعلق به '+ties.map(name).join('، ')+' است: '+fmt(best.value)+' . '+explanation;
     return result(title,ctx,metric.startsWith('product-')?[{label:'انبار',route:'#/products'}]:personAction(entities.get(best.id)),rows.slice(0,n).map((x,i)=>C.toFa(i+1)+'. '+name(x)+' — '+fmt(x.value)+(metric==='turnover'?' (بدهکار: '+money(x.dr)+'، بستانکار: '+money(x.cr)+')':'')),{metric,mode,value:best.value,id:best.id,rows:rows.slice(0,n),from:range.from,to:range.to});
   }
   let value,details=[];
   if(metric==='profit'||metric==='expense'){const r=C.report(st,range.from,range.to);value=metric==='profit'?r.net:r.expenses;if(metric==='profit')details=['فروش خالص: '+money(r.revenue),'بهای کالای فروش‌رفته و تعدیلات: '+money(r.cogsTotal),'هزینه‌ها: '+money(r.expenses)];}
+  else if(spec.product){value=sums.get(spec.product.id)?.value||0;}
   else if(p){value=sums.get(p.id)?.value||0;if(metric==='turnover'){const x=sums.get(p.id)||{dr:0,cr:0};details=['بدهکار: '+money(x.dr),'بستانکار: '+money(x.cr)];}}
   else value=[...sums.values()].reduce((v,x)=>v+x.value,0);
-  if(!Number.isFinite(value))return search();
-  let text=label+(p?' '+(metric==='sales'?'به ':metric==='purchases'?'از ':'')+p.name:'')+' در '+range.label+' برابر '+fmt(value)+' است. '+explanation;
+  if(!Number.isFinite(value)||(!countMetric&&!Number.isSafeInteger(value)))return clarify('مبلغ خارج از محدوده محاسبه امن است.');
+  let text=label+(spec.product?' '+spec.product.name:'')+(p?' '+(metric==='sales'?'به ':metric==='purchases'?'از ':'')+p.name:'')+' در '+range.label+' برابر '+fmt(value)+' است. '+explanation;
   if(metric==='invoice-count'&&p){const sum=docs.filter(i=>i.personId===p.id).reduce((n,i)=>n+C.invoiceTotals(i).total,0);text='برای '+p.name+' تعداد '+C.toFa(value)+' فاکتور در '+range.label+' با مجموع ناخالص '+money(sum)+' ثبت شده است. این مبلغ مانده حساب نیست.';}
-  return result(text,ctx,p?personAction(p):routes,details,{metric,mode,value,personId:p?.id,from:range.from,to:range.to});
+  return result(text,ctx,p?personAction(p):routes,details,{metric,mode,value,personId:p?.id,productId:spec.product?.id,from:range.from,to:range.to});
 }
-C.smartAssistant={ask};if(typeof module!=='undefined'&&module.exports)module.exports=C.smartAssistant;
+const fields=Object.freeze(['sales','purchases','profit','expense','turnover','balance','receivable','payable','cash','receipts','payments','cheques','inventory-value','stock','invoice-count','sale-count','purchase-count','product-sales','product-qty','risk']);
+const periods=Object.freeze({today:'امروز',yesterday:'دیروز',week:'این هفته',prevweek:'هفته قبل',mtd:'این ماه',prevmonth:'ماه قبل',fytd:'سال مالی جاری',all:'از ابتدای ثبت تا امروز',current:'وضعیت فعلی'});
+const rankMetrics=['sales','purchases','turnover','receivable','payable','invoice-count','sale-count','purchase-count','product-sales','product-qty'];
+const personMetrics=['sales','purchases','turnover','balance','receipts','payments','invoice-count','sale-count','purchase-count','cheques'];
+const productMetrics=['stock','product-sales','product-qty'];
+const rules=Object.freeze({sales:'reports',purchases:'reports',profit:'reports',expense:'reports',turnover:'balances',balance:'balances',receivable:'balances',payable:'balances',cash:'money',receipts:'money',payments:'money',cheques:'money','inventory-value':'warehouse',stock:'warehouse','invoice-count':'reports','sale-count':'reports','purchase-count':'reports','product-sales':'reports','product-qty':'reports',risk:'reports'});
+function structuredPermission(r,allow){
+ if(!r||!fields.includes(r.metric)||!allow||allow[rules[r.metric]]!==true)return false;
+ if(['purchases','profit','inventory-value','risk'].includes(r.metric)&&allow.cost!==true)return false;
+ if((r.person||r.mode==='rank'&&!r.metric.startsWith('product-')||r.metric==='risk')&&allow.balances!==true)return false;
+ if((r.metric==='risk'||r.metric==='cash')&&allow.money!==true)return false;
+ if(r.metric==='cash'&&allow.reports!==true)return false;
+ if(r.metric.startsWith('product-')&&allow.warehouse!==true)return false;
+ return true;
+}
+function structuredDate(value){if(typeof value!=='string')return null;const t=C.toEn(value).trim();if(/^1[234567]\d{2}[\/.-]/.test(t))return C.jalaliToIso(t);return C.validIso(t)&&+t.slice(0,4)>=1800&&+t.slice(0,4)<=2200?t:null;}
+function structuredRange(st,r,today){
+ if(r.period==='custom'){const from=structuredDate(r.from),to=structuredDate(r.to);if(!from||!to||from>to||to>today)return null;return {from,to,label:C.fmtDate(from)+' تا '+C.fmtDate(to)};}
+ if(r.period==='recent'){if(!Number.isInteger(r.days)||r.days<1||r.days>3650)return null;return {from:C.addDays(today,1-r.days),to:today,label:C.toFa(r.days)+' روز اخیر'};}
+ if(!Object.hasOwn(periods,r.period))return null;
+ if(r.period==='all'||r.period==='current')return {from:null,to:today,label:periods[r.period]};
+ const a=C.periodRange(r.period,today,st.settings?.fyMonth);return {...a,to:a.to>today?today:a.to,label:periods[r.period]};
+}
+function structuredRead(st,r,opts={}){
+ const today=opts.today||C.todayISO();if(!r||!fields.includes(r.metric)||!['total','rank','person','product'].includes(r.mode))return clarify('نوع گزارش یا محدوده آن نامعتبر است.');
+ if(!structuredPermission(r,opts.allow))return denied();
+ const metric=r.metric,mode=r.mode==='total'?'scalar':r.mode;
+ if(r.mode==='rank'&&!rankMetrics.includes(metric)||r.mode==='person'&&!personMetrics.includes(metric)||r.mode==='product'&&!productMetrics.includes(metric)||r.mode==='rank'&&(r.person||r.product)||r.mode!=='person'&&r.person||r.mode!=='product'&&r.product||metric==='balance'&&r.mode!=='person'||metric==='stock'&&r.mode!=='product')return clarify('این نوع گزارش با محدوده انتخاب‌شده سازگار نیست.');
+ if(r.mode==='rank'&&(!['asc','desc'].includes(r.order)||!Number.isInteger(r.limit)||r.limit<1||r.limit>10))return clarify('تعداد ردیف‌ها و ترتیب رتبه‌بندی مشخص نیست.');
+ let p=null,prod=null;
+ if(r.mode==='person'||r.mode==='product'){
+   const name=r.mode==='person'?r.person:r.product,arr=r.mode==='person'?st.people:st.products;
+   let candidates=typeof name==='string'&&normalize(name)?arr.filter(x=>normalize(x.name)===normalize(name)):[];
+   if(!candidates.length&&r.mode==='person'&&typeof name==='string'&&normalize(name).length>=3)candidates=arr.filter(x=>whole(normalize(x.name),normalize(name)));
+   if(candidates.length!==1)return clarify((candidates.length?'چند مورد همنام وجود دارد. ':'نام دقیق در برنامه پیدا نشد. ')+(r.mode==='person'?'نام کامل شخص را مشخص کنید.':'نام کامل کالا را مشخص کنید.'));
+   if(r.mode==='person')p=candidates[0];else prod=candidates[0];
+ }
+ if(metric==='cheques')return Ch.structuredReport(st,r,opts,p);
+ if(['stock','cash','inventory-value','risk'].includes(metric)&&r.period!=='current')return clarify('این گزارش فقط برای وضعیت فعلی در دسترس است.');
+ if(!['stock','cash','inventory-value','risk'].includes(metric)&&r.period==='current'&&!['balance','receivable','payable'].includes(metric))return clarify('بازه زمانی گزارش را مشخص کنید.');
+ const range=structuredRange(st,r,today);if(!range)return clarify('تاریخ یا بازه گزارش معتبر نیست.');
+ const spec={metric,mode,p,products:prod?[prod]:[],product:metric.startsWith('product-')?prod:null,q:'',explicit:range,range,low:r.order==='asc',limit:r.limit,direction:'all',days:0};
+ const out=compute(st,spec,opts,today);if(out.data?.metric===metric&&Number.isFinite(out.data.value)&&(['stock','product-qty'].includes(metric)||Number.isSafeInteger(out.data.value))){out.data.scope={metric,mode:r.mode,person:p?.name||null,product:prod?.name||null,period:r.period,from:range.from,to:range.to};}
+ return out;
+}
+
+C.smartAssistant={ask,structuredRead,structuredPermission};if(typeof module!=='undefined'&&module.exports)module.exports=C.smartAssistant;
 })(typeof window!=='undefined'?window:globalThis);

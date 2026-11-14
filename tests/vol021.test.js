@@ -16,5 +16,5 @@ for(const token of ['AiMemoryPolicy.canGenerate','m.threshold','m.lowMemory','"a
 for(const token of ['mp.use_mmap=true','mp.use_mlock=false','cp.n_ctx=needed','cp.n_batch=128','cp.n_ubatch=64','i+=128','n+limit>=cap'])assert.ok(cpp.includes(token),token);
 assert.ok(setup.includes('prefetch = 0; // Fix Quick: demand-page weights on mobile'));assert.ok(setup.includes('AiMemoryPolicy.java'));
 assert.ok(ui.includes("q('#ai-download').hidden=!view.showDownload"));assert.ok(ui.includes('مدل سالم است اما فعلاً حافظه'));
-assert.ok(read('www/smart-ui.js').includes("kind:'greeting'"));assert.ok(read('www/sw.js').includes('vol021'));assert.ok(read('www/diag.js').includes("APP_VER = '1.52'"));assert.ok(read('.github/workflows/build-apk.yml').includes('tests/AiMemoryPolicyTest.java'));
+assert.ok(read('www/smart-ui.js').includes('FQOrchestrator.run'));assert.ok(read('www/sw.js').match(/vol02[123]/));assert.ok(read('www/diag.js').match(/APP_VER = '1\.5[234]'/));assert.ok(read('.github/workflows/build-apk.yml').includes('tests/AiMemoryPolicyTest.java'));
 console.log('v021: installed/active/download state visibility, memory-policy wiring, pinned model and read-only assistant retained');
