@@ -1,5 +1,5 @@
 /* Crash / error reporting — loaded before everything else, no dependencies. */
-const APP_VER = '1.50';
+const APP_VER = '1.51';
 const SUPPORT_WA = '989999917199';
 const DIAG = { crumbs: [], max: 30 };
 function diagLoad() { try { return JSON.parse(localStorage.getItem('fq_errlog') || '[]'); } catch (e) { return []; } }

@@ -16,5 +16,5 @@ const read=f=>fs.readFileSync(path.join(__dirname,'../www',f),'utf8');const page
 for(const s of ['Drafts.bind(f,dk','f.onsubmit = submitInvoice','smartGuardConfirm(\'invoice\'','id="nf-save"','id="ui2-total"','ui2UpdateTotal(f)','ui2SyncRow(row,rd.items[i])'])assert.ok(pages.includes(s),s);
 assert.ok(css.includes('position:sticky;bottom:0'));assert.ok(ui.includes('if(!isAdmin())return'));assert.ok(ui.includes('Core.serialProblems(S,[item])'));
 assert.ok(html.includes('ui2.css')&&html.includes('ui2.js')&&sw.includes('ui2.css')&&sw.includes('ui2.js'));
-assert.ok(/APP_VER = '1\.(47|48|49|50)'/.test(read('diag.js')));
+assert.ok(/APP_VER = '1\.(47|48|49|50|51)'/.test(read('diag.js')));
 console.log('v016: UI wiring, previous smart safety/assistant/entity protections, read-only calculations passed');

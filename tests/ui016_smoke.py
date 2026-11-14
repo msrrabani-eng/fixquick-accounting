@@ -38,5 +38,5 @@ with sync_playwright() as p:
  navigate('#/new/purchase');assert not pg.locator('#nf').evaluate("el=>el.classList.contains('ui2-sticky')")
  navigate('#/settings/advanced');pg.locator('#ui2-reset').click();pg.wait_for_timeout(200);assert pg.evaluate('S.settings.invoiceUI.sticky')==True
  pg.evaluate("CUR={admin:false,user:'staff',perms:{}};");navigate('#/settings');assert pg.locator('#ui2-settings').count()==0;pg.evaluate("CUR={admin:true,user:'owner'};")
- navigate('#/assistant');pg.locator('#fq-chat-input').fill('فروش این ماه چقدر بوده؟');pg.locator('#fq-chat-form button[type=submit]').click();pg.wait_for_timeout(250);assert pg.locator('.fq-msg').count()==2;pg.screenshot(path=str(SHOTS/'chat.png'));print('ERRORS',errs);assert not errs
+ navigate('#/home');pg.evaluate("window.Capacitor={Plugins:{FixQuickAI:{status:async()=>({status:'ready',runtime:true,compatible:true,speech:false}),cancel:async()=>({}),stopListening:async()=>({}),stopSpeaking:async()=>({})}}}");pg.locator('[data-act=aiLaunch]').click();pg.wait_for_timeout(250);pg.locator('#fq-chat-input').fill('فروش این ماه چقدر بوده؟');pg.locator('#fq-chat-form button[type=submit]').click();pg.wait_for_timeout(250);assert pg.locator('.fq-msg').count()==2;pg.screenshot(path=str(SHOTS/'chat.png'));print('ERRORS',errs);assert not errs
  b.close()

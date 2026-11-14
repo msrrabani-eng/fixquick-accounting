@@ -25,7 +25,7 @@ function pageHome() {
   if (S.settings.auditIssues > 0 && isAdmin()) h += '<div class="alert warn">' + ico('alert') + 'بررسی خودکار هفتگی ' + fa(S.settings.auditIssues) + ' ناهماهنگی در اطلاعات پیدا کرد. <button class="lnk" data-act="audit">جزئیات</button></div>';
   if (can('backup') && hasData && (days === null || days > 7)) h += '<div class="alert warn">' + ico('save') + (days === null ? 'هنوز پشتیبان نگرفته‌اید.' : 'آخرین پشتیبان ' + fa(days) + ' روز پیش بوده.') + ' <button class="lnk" data-act="saveLocal">ذخیره کن</button></div>';
   h += '<button class="gsbar" data-act="go" data-h="#/search">' + ico('search') + '<span>جستجو یا سؤال: «آیفون ۱۶ از کی خریدیم»…</span></button>';
-  h += '<div class="row2 fq-smart-actions"><button class="btn ghost" data-act="go" data-h="#/assistant">' + ico('chat') + 'دستیار گفت‌وگویی</button>' + (can('reports') ? '<button class="btn ghost" data-act="go" data-h="#/safety">' + ico('shield') + 'کنترل خطا</button>' : '') + '</div>';
+  h += '<div class="row2 fq-smart-actions"><button class="btn ghost ai20-home" data-act="aiLaunch" aria-label="دستیار هوشمند؛ نصب یا ورود">' + ico('chat') + 'دستیار هوشمند</button>' + (can('reports') ? '<button class="btn ghost" data-act="go" data-h="#/safety">' + ico('shield') + 'کنترل خطا</button>' : '') + '</div>';
   // one tap to every everyday job
   const big = [[true, 'newInv', 'sale', 'receipt', 'فروش', 'green'], [can('purchase'), 'newInv', 'purchase', 'cart', 'خرید', 'blue']].filter(x => x[0]);
   const small = [[can('money'), 'quickTx', 'receipt', 'in', 'دریافت'], [can('money'), 'quickTx', 'payment', 'out', 'پرداخت'], [can('money') && feat('cheques'), 'addCheque', '', 'cheque', 'ثبت چک'], [can('money') && feat('cheques'), 'spendChequeHome', '', 'cheque', 'خرج چک'], [can('money') && feat('transfer'), 'transfer', '', 'transfer', 'حواله'], [can('money') && feat('expenses'), 'addExpense', '', 'wallet', 'هزینه'], [true, 'newInv', 'sale_return', 'ret', 'برگشتی']].filter(x => x[0]);
@@ -701,7 +701,7 @@ function pageMore() {
   const row = (ic, t, act, sub) => '<button class="row" ' + (act[0] === '#' ? 'data-act="go" data-h="' + act + '"' : 'data-act="' + act + '"') + '><span><b>' + ico(ic) + ' ' + t + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</span><em>‹</em></button>';
   const open = S.cheques.filter(c => !c.done).length, cost = can('cost') && can('reports');
   const sec = (title, ic, items) => { items = items.filter(Boolean); return items.length ? menu019Group(title, ic, items.join(''), '', fa(items.length) + ' گزینه') : ''; };
-  let h = '<div class="menu019"><div class="card flush menu019-quick">' + row('settings', 'تنظیمات و مدیریت', '#/settings') + (can('backup') ? row('save', 'پشتیبان‌گیری و بازیابی', '#/settings/backup') : '') + row('book', 'راهنما و واژه‌نامه حسابداری', 'helpAll') + row('chat', 'دستیار هوشمند', '#/assistant') + '</div><div class="ch gs-h">دسته‌بندی امکانات</div>'; h += sec('اسناد و عملیات روزانه', 'receipt', [
+  let h = '<div class="menu019"><div class="card flush menu019-quick">' + row('settings', 'تنظیمات و مدیریت', '#/settings') + (can('backup') ? row('save', 'پشتیبان‌گیری و بازیابی', '#/settings/backup') : '') + row('book', 'راهنما و واژه‌نامه حسابداری', 'helpAll') + '</div><div class="ch gs-h">دسته‌بندی امکانات</div>'; h += sec('اسناد و عملیات روزانه', 'receipt', [
     feat('cheques') && row('cheque', 'چک‌ها (دریافتی و پرداختی)', '#/cheques', open ? fa(open) + ' مورد در جریان' : 'در صندوق، واگذار به بانک، وصول، خرج، برگشت'),
     feat('expenses') && row('cash', 'هزینه‌ها', '#/expenses', 'اجاره، حقوق، قبوض و…'),
     feat('transfer') && row('transfer', 'حواله بین اشخاص', 'transfer', 'انتقال بدهی از یک شخص به دیگری')]);
@@ -845,6 +845,7 @@ function setPin() {
 
 /* ─────────── actions ─────────── */
 const actions = {
+  aiLaunch: () => aiLaunch(),
   fqChatExample: d => smartAskQuestion(d.q),
   go: d => { goHash(d.h); },
   chip: d => { UI[d.k] = d.v; if (d.k === 'prodCat') UI.limProd = 100; if (d.k === 'repTab' || d.k === 'rep') UI.limRep = 60; if (d.k === 'rep' && d.v === 'custom' && !UI.repFrom) { UI.repFrom = Core.periodRange('month').from; UI.repTo = today(); } render(); },
