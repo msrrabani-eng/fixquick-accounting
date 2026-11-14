@@ -192,7 +192,7 @@ async function autoBackupRead(x) {
 }
 function autoBackupCard() {
   const where = { DOCUMENTS: 'پوشه Documents/FixQuick ' + DEV, DATA: 'حافظه داخلی برنامه', APP: 'حافظه برنامه' }[S.settings.autoBkWhere] || '';
-  return '<div class="card"><div class="ch">' + ico('save') + 'پشتیبان خودکار ' + help('autobackup') + '</div><p class="hint">هر روز خودکار یک نسخه پشتیبان روی همین ' + DEV + ' ذخیره می‌شود (۷ روز آخر نگه داشته می‌شود). ' + (S.settings.autoBk ? 'آخرین: ' + fmtDate(S.settings.autoBk) + (where ? ' در ' + where : '') : 'هنوز ساخته نشده است.') + '</p><p class="hint">پشتیبان خودکار با حذف برنامه یا خرابی گوشی ممکن است از بین برود؛ هفته‌ای یک بار «دریافت پشتیبان» را بزنید و فایل را بیرون از گوشی نگه دارید.</p><button class="btn ghost" data-act="autoRestore">' + ico('restore') + 'بازیابی از ذخیره‌ها و پشتیبان خودکار</button></div>';
+  return '<div class="card"><div class="ch">' + ico('save') + 'پشتیبان خودکار ' + help('autobackup') + '</div><p class="hint">هر روز خودکار یک نسخه پشتیبان روی همین ' + DEV + ' ذخیره می‌شود (۷ روز آخر نگه داشته می‌شود). ' + (S.settings.autoBk ? 'آخرین: ' + fmtDate(S.settings.autoBk) + (where ? ' در ' + where : '') : 'هنوز ساخته نشده است.') + '</p><details class="backup019-note"><summary>نکته مهم درباره پشتیبان خودکار</summary><p class="hint">پشتیبان خودکار با حذف برنامه یا خرابی گوشی ممکن است از بین برود؛ هفته‌ای یک بار فایل پشتیبان را بیرون از گوشی نگه دارید.</p></details><button class="btn ghost" data-act="autoRestore">' + ico('restore') + 'بازیابی از ذخیره‌ها و پشتیبان خودکار</button></div>';
 }
 async function autoRestoreFlow() {
   const list = await autoBackupList(); if (!list.length) return toast('فایل پشتیبانی در پوشه FixQuick پیدا نشد.', true);

@@ -36,6 +36,10 @@ jobs:
           node tests/vol014.test.js
           node tests/vol015.test.js
           node tests/vol016.test.js
+          node tests/vol017.test.js
+          node tests/finance017.test.js
+          node tests/vol018.test.js
+          node tests/vol019.test.js
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |
@@ -79,6 +83,11 @@ jobs:
 
       - name: Sync web files
         run: npx cap sync android
+
+      - name: Prepare optional native local AI engine
+        run: |
+          sdkmanager --install "ndk;27.2.12479018" "cmake;3.22.1"
+          python3 tools/install_local_ai.py
 
       - name: Use the fixed signing key (so updates install over the old version)
         env:

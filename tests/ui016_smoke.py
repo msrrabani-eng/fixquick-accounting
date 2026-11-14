@@ -33,10 +33,10 @@ with sync_playwright() as p:
   pg.evaluate('y=>document.querySelector("#main").scrollTop=y',y);pg.wait_for_timeout(80);a=pg.locator('.ui2-invoice-bar').bounding_box();m=pg.locator('#main').bounding_box();print('bar',y,a,'main',m);assert a['y']+a['height']<=m['y']+m['height']+2 and a['y']>=m['y']-2
  pg.locator('.ui2-fold-btn').first.click();assert pg.locator('.it-row').first.evaluate("el=>el.classList.contains('ui2-folded')");assert pg.evaluate('readInvoice().items.length')==5;assert pg.evaluate('readInvoice().items[0].price')==3000000000;pg.locator('.ui2-fold-btn').first.click();assert not pg.locator('.it-row').first.evaluate("el=>el.classList.contains('ui2-folded')");print('fold test passed');
  print('total',pg.locator('#ui2-total').inner_text());assert pg.locator('#ui2-total').inner_text()==pg.locator('#s-tot').inner_text();pg.screenshot(path=str(SHOTS/'invoice.png'))
- navigate('#/settings');assert pg.locator('#ui2-settings input').count()==7
+ navigate('#/settings/advanced');assert pg.locator('#ui2-settings input').count()==7
  pg.evaluate('save=async()=>true');pg.locator('#ui2-settings [name=sticky]').uncheck();pg.locator('#ui2-settings [type=submit]').click();pg.wait_for_timeout(200);assert pg.evaluate('S.settings.invoiceUI.sticky')==False
  navigate('#/new/purchase');assert not pg.locator('#nf').evaluate("el=>el.classList.contains('ui2-sticky')")
- navigate('#/settings');pg.locator('#ui2-reset').click();pg.wait_for_timeout(200);assert pg.evaluate('S.settings.invoiceUI.sticky')==True
+ navigate('#/settings/advanced');pg.locator('#ui2-reset').click();pg.wait_for_timeout(200);assert pg.evaluate('S.settings.invoiceUI.sticky')==True
  pg.evaluate("CUR={admin:false,user:'staff',perms:{}};");navigate('#/settings');assert pg.locator('#ui2-settings').count()==0;pg.evaluate("CUR={admin:true,user:'owner'};")
- navigate('#/assistant');pg.locator('#fq-chat-input').fill('فروش این ماه چقدر بوده؟');pg.locator('#fq-chat-form button').click();pg.wait_for_timeout(250);assert pg.locator('.fq-msg').count()==2;pg.screenshot(path=str(SHOTS/'chat.png'));print('ERRORS',errs);assert not errs
+ navigate('#/assistant');pg.locator('#fq-chat-input').fill('فروش این ماه چقدر بوده؟');pg.locator('#fq-chat-form button[type=submit]').click();pg.wait_for_timeout(250);assert pg.locator('.fq-msg').count()==2;pg.screenshot(path=str(SHOTS/'chat.png'));print('ERRORS',errs);assert not errs
  b.close()

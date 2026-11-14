@@ -1,5 +1,9 @@
 /* Line icons (standard accounting/office set, Lucide-style, MIT). ico('name') → inline SVG that follows the text color. */
 const ICONS = {
+  download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
+  mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13"/>',
+
   flashlight:'<path d="M9 2h6l2 6-2 3v11H9V11L7 8z"/><path d="M7 8h10M12 14v3"/>',
   rotate:'<path d="M20 7v5h-5M4 17v-5h5"/><path d="M6 6a8 8 0 0 1 14 6M4 12a8 8 0 0 0 14 6"/>',
   keyboard:'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M10 13h.01M14 13h.01M18 13h.01M8 16h8"/>',

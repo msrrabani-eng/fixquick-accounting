@@ -692,12 +692,16 @@ function repShareText() {
 }
 
 /* ─────────── MORE / SETTINGS ─────────── */
+// v019: native disclosure widgets keep existing controls mounted, routes and permissions unchanged.
+function menu019Group(title, icon, content, key, sub, open) {
+  if (!content) return '';
+  return '<details class="menu019-group"' + (key ? ' data-settings-group="' + esc(key) + '"' : '') + (open ? ' open' : '') + '><summary>' + ico(icon) + '<span><b>' + esc(title) + '</b>' + (sub ? '<small>' + esc(sub) + '</small>' : '') + '</span><span class="menu019-arrow" aria-hidden="true">‹</span></summary><div class="menu019-content">' + content + '</div></details>';
+}
 function pageMore() {
   const row = (ic, t, act, sub) => '<button class="row" ' + (act[0] === '#' ? 'data-act="go" data-h="' + act + '"' : 'data-act="' + act + '"') + '><span><b>' + ico(ic) + ' ' + t + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</span><em>‹</em></button>';
   const open = S.cheques.filter(c => !c.done).length, cost = can('cost') && can('reports');
-  const sec = (title, ic, items) => { items = items.filter(Boolean); return items.length ? '<div class="ch gs-h">' + ico(ic) + title + '</div><div class="card flush">' + items.join('') + '</div>' : ''; };
-  let h = sec('اسناد و عملیات روزانه', 'receipt', [
-    row('receipt', 'فاکتورها', '#/invoices', 'فروش، خرید و برگشتی‌ها'),
+  const sec = (title, ic, items) => { items = items.filter(Boolean); return items.length ? menu019Group(title, ic, items.join(''), '', fa(items.length) + ' گزینه') : ''; };
+  let h = '<div class="menu019"><div class="card flush menu019-quick">' + row('settings', 'تنظیمات و مدیریت', '#/settings') + (can('backup') ? row('save', 'پشتیبان‌گیری و بازیابی', '#/settings/backup') : '') + row('book', 'راهنما و واژه‌نامه حسابداری', 'helpAll') + row('chat', 'دستیار هوشمند', '#/assistant') + '</div><div class="ch gs-h">دسته‌بندی امکانات</div>'; h += sec('اسناد و عملیات روزانه', 'receipt', [
     feat('cheques') && row('cheque', 'چک‌ها (دریافتی و پرداختی)', '#/cheques', open ? fa(open) + ' مورد در جریان' : 'در صندوق، واگذار به بانک، وصول، خرج، برگشت'),
     feat('expenses') && row('cash', 'هزینه‌ها', '#/expenses', 'اجاره، حقوق، قبوض و…'),
     feat('transfer') && row('transfer', 'حواله بین اشخاص', 'transfer', 'انتقال بدهی از یک شخص به دیگری')]);
@@ -714,17 +718,10 @@ function pageMore() {
     cost && row('chart', 'صورت سود و زیان', '#/reports/pl'),
     cost && row('scale', 'تراز آزمایشی', '#/reports/tb'),
     can('balances') && row('users', 'مانده حساب اشخاص', '#/reports/people')]);
-  h += sec('اطلاعات پایه', 'users', [
-    row('users', 'اشخاص (مشتریان و تأمین‌کنندگان)', '#/people'),
-    row('package', 'کالاها و انبار', '#/products'),
+  h += sec('انبار و موجودی', 'package', [
     can('warehouse') && row('transfer', 'انبارها و انتقال بین انبارها', '#/warehouses', Core.multiWh(S) ? fa(Core.whList(S).filter(w => !w.archived).length) + ' انبار' : 'تعریف انبار دوم و انتقال کالا'),
     row('up', 'تحلیل انبار', '#/stock', 'کمبود، راکد و پیشنهاد سفارش')]);
-  h += sec('سیستم', 'settings', [
-    can('backup') && row('save', 'ذخیره اطلاعات', 'saveLocal', 'پشتیبان در پوشه Documents/FixQuick'),
-    row('settings', 'تنظیمات و پشتیبان', '#/settings'),
-    row('help', 'راهنما و واژه‌نامه حسابداری', 'helpAll'),
-    (isNative() || DESK) && row('exit', 'خروج از برنامه', 'exitApp')]);
-  return { title: 'بیشتر', html: h + aboutCard() + '<p class="hint center">حسابداری فیکس کوییک · نسخه ' + fa(APP_VER) + (curName() ? ' · کاربر: ' + esc(curName()) + (isAdmin() ? ' (مدیر)' : '') : '') + '</p>' };
+  return { title: 'بیشتر', html: h + menu019Group('پشتیبانی و خروج', 'phone', aboutCard() + ((isNative() || DESK) ? row('exit', 'خروج از برنامه', 'exitApp') : ''), '', 'واتساپ، تماس و وب‌سایت') + '</div><p class="hint center">حسابداری فیکس کوییک · نسخه ' + fa(APP_VER) + (curName() ? ' · کاربر: ' + esc(curName()) + (isAdmin() ? ' (مدیر)' : '') : '') + '</p>' };
 }
 function aboutCard() {
   const lnk = (ic, t, s, u) => '<a class="ab-row" href="' + u + '" target="_blank" rel="noopener"><i>' + ic + '</i><span><b>' + t + '</b><small>' + s + '</small></span><em>‹</em></a>';
@@ -735,29 +732,41 @@ function aboutCard() {
     lnk(ico('insta'), 'اینستاگرام', '@fixq.ir', 'https://instagram.com/fixq.ir') +
     '<div class="ab-f">با مدیریت <b>محمد صادق ربانی</b><small>طراح و صاحب امتیاز برنامه</small></div></div>';
 }
-function pageSettings() {
+function pageSettings(section) {
+  if(section === 'backup' && !can('backup')) return {title:'دسترسی محدود',html:empty(ico('lock'),'برای پشتیبان‌گیری مجوز ندارید.'),back:'#/more'};
   const days = S.settings.lastBackup ? Core.diffDays(S.settings.lastBackup, today()) : null;
-  let h = '';
+  const keepOpen = lastRoute === (location.hash || '').split('?')[0] ? Array.from(document.querySelectorAll('#main [data-settings-group][open]')).map(x => x.dataset.settingsGroup) : null;
+  let h = '', groups = '';
+  const next = (key,title,icon,sub) => { if(section === 'backup'){if(key === 'backup')groups += h; h='';return;} groups += menu019Group(title, icon, h, key, sub, keepOpen ? keepOpen.includes(key) : section === key); h=''; };
   if (isAdmin()) h += '<form class="card" id="setf"><label class="fld"><span>نام کسب‌وکار (روی گزارش‌ها)</span><input class="inp" name="business" value="' + esc(S.settings.business) + '"></label>' + '<button type="button" class="btn ghost" data-act="go" data-h="#/accounts">' + ico('wallet') + 'صندوق و بانک‌ها (موجودی اول دوره، شماره حساب)</button>' + '<div class="row2"><label class="fld"' + (feat('vat') ? '' : ' hidden') + '><span>درصد ارزش افزوده</span><input class="inp ltr" name="vatRate" inputmode="decimal" value="' + fa(vatRateSet()) + '"></label><label class="fld"><span>شروع سال مالی ' + help('fy') + '</span><select class="inp" name="fyMonth">' + Core.MONTHS.map((m, i) => '<option value="' + (i + 1) + '"' + (i + 1 === fyMonth() ? ' selected' : '') + '>۱ ' + m + '</option>').join('') + '</select></label></div><p class="hint">درصد ارزش افزوده روی فاکتورهای جدید اعمال می‌شود؛ فاکتورهای قبلی با همان درصد خودشان می‌مانند.</p><label class="fld"><span>هشدار سود کم در فاکتور فروش (درصد) ' + help('minmargin') + '</span><input class="inp ltr" name="minMargin" inputmode="decimal" value="' + fa(minMargin()) + '"></label><button class="btn blue" type="submit">ذخیره تنظیمات</button></form>';
   if (isAdmin()) h += '<form class="card" id="usf"><div class="ch">' + ico('store') + 'تنظیمات کاربری</div><label class="fld"><span>نام فروشنده روی فاکتور (نام مجموعه یا نام خانوادگی شما)</span><input class="inp" name="seller" maxlength="60" placeholder="' + esc(S.settings.business || 'مثلاً: موبایل ربانی') + '" value="' + esc(S.settings.sellerName || '') + '"></label><label class="fld"><span>واحد پول ' + help('unit') + '</span><select class="inp" name="unit"><option value="rial"' + (Core.unit === 'rial' ? ' selected' : '') + '>ریال</option><option value="toman"' + (Core.unit === 'toman' ? ' selected' : '') + '>تومان</option></select></label><p class="hint">نام فروشنده بالای فاکتور خرید و فروش چاپ می‌شود. اگر خالی باشد، «نام کسب‌وکار» چاپ می‌شود.</p><button class="btn blue" type="submit">ذخیره تنظیمات کاربری</button></form>';
+  next('business','کسب‌وکار و امور مالی','store','نام، واحد پول، سال مالی و ارزش افزوده');
   const st = S.settings, th = st.theme || 'auto', ac = st.accent || 'neutral', fs = Number(st.fontScale) || 1;
   h += '<div class="card"><div class="ch">' + ico('palette') + 'ظاهر برنامه</div><div class="seg">' + [['light', ico('sun') + 'روز'], ['dark', ico('moon') + 'شب'], ['auto', ico('phonecell') + 'خودکار']].map(x => '<button type="button" class="' + (th === x[0] ? 'on' : '') + '" data-act="setTheme" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div><div class="sw">' + Object.keys(ACCENTS).map(k => '<button type="button" title="' + ACCENTS[k][2] + '" class="' + (ac === k ? 'on' : '') + '" style="background:' + ACCENTS[k][0] + '" data-act="setAccent" data-v="' + k + '"></button>').join('') + '</div><div class="fsr"><button type="button" data-act="fontStep" data-v="-1">A−</button><span class="v">اندازه نوشته: ' + fa(Math.round(fs * 100)) + '٪</span><button type="button" data-act="fontStep" data-v="1">A+</button></div><button type="button" class="lnk center" data-act="fontStep" data-v="0">بازگشت به اندازه عادی</button></div>';
-  if (can('backup')) h += '<div class="card"><div class="ch">' + ico('save') + 'پشتیبان‌گیری</div><p class="hint">' + (days === null ? 'هنوز پشتیبان نگرفته‌اید.' : 'آخرین پشتیبان: ' + fmtDate(S.settings.lastBackup) + ' (' + fa(days) + ' روز پیش)') + '</p><p class="hint">اطلاعات فقط روی همین گوشی است. با حذف برنامه یا پاک‌کردن اطلاعات مرورگر از بین می‌رود؛ پس مرتب پشتیبان بگیرید و فایل را برای خودتان (مثلاً تلگرام/Drive) بفرستید.</p><button class="btn green" data-act="saveLocal">' + ico('save') + 'ذخیره اطلاعات</button><p class="hint center">' + (fsP() ? 'مسیر ذخیره: ' + (S.settings.lastSave ? saveWhere(S.settings.lastSave.where) : saveWhere('DOCUMENTS')) + (S.settings.lastSave ? ' · آخرین ذخیره: ' + fmtDate(Core.todayISO(new Date(S.settings.lastSave.at))) : '') : 'در مرورگر، فایل در پوشه Downloads ذخیره می‌شود.') + '</p><div class="row2"><button class="btn blue" data-act="backup">' + ico('share') + 'ارسال فایل پشتیبان</button><button class="btn ghost" data-act="restore">بازیابی از فایل</button></div><input type="file" id="restore-file" accept=".json,application/json" hidden></div>';
-  if (isAdmin()) h += ui2SettingsCard();
+  next('appearance','ظاهر برنامه','palette','رنگ، حالت شب و اندازه نوشته');
+  if (can('backup')) h += '<div class="card"><div class="ch">' + ico('save') + 'پشتیبان‌گیری</div><p class="hint">' + (days === null ? 'هنوز پشتیبان نگرفته‌اید.' : 'آخرین پشتیبان: ' + fmtDate(S.settings.lastBackup) + ' (' + fa(days) + ' روز پیش)') + '</p><details class="backup019-note"><summary>نکات نگهداری امن فایل</summary><p class="hint">اطلاعات فقط روی همین گوشی است. با حذف برنامه یا پاک‌کردن اطلاعات مرورگر از بین می‌رود؛ پس مرتب پشتیبان بگیرید و فایل را برای خودتان (مثلاً تلگرام/Drive) بفرستید.</p></details><button class="btn green" data-act="saveLocal">' + ico('save') + 'ذخیره اطلاعات</button><p class="hint center">' + (fsP() ? 'مسیر ذخیره: ' + (S.settings.lastSave ? saveWhere(S.settings.lastSave.where) : saveWhere('DOCUMENTS')) + (S.settings.lastSave ? ' · آخرین ذخیره: ' + fmtDate(Core.todayISO(new Date(S.settings.lastSave.at))) : '') : 'در مرورگر، فایل در پوشه Downloads ذخیره می‌شود.') + '</p><div class="row2"><button class="btn blue" data-act="backup">' + ico('share') + 'ارسال فایل</button><button class="btn ghost" data-act="restore">بازیابی از فایل</button></div><input type="file" id="restore-file" accept=".json,application/json" hidden></div>';
   if (can('backup')) h += autoBackupCard();
+  next('backup','پشتیبان‌گیری و بازیابی','save',days === null ? 'هنوز پشتیبان نگرفته‌اید' : 'آخرین پشتیبان: ' + fa(days) + ' روز پیش');
+  if (isAdmin()) h += ui2SettingsCard() + aiSourceSettingsCard();
+  next('advanced','فاکتورها و هوش مصنوعی','settings','نمایش فاکتورها و منبع مدل');
   const au = S.settings.auth || {};
   if (isAdmin()) {
   h += '<div class="card"><div class="ch">' + ico('user') + 'حساب کاربری</div><p class="hint">نام کاربری: <b>' + esc(au.user || '') + '</b></p><div class="row2"><button class="btn ghost" data-act="changePass">تغییر رمز</button><button class="btn ghost" data-act="newCode">کد بازیابی جدید</button></div><button class="btn ghost" data-act="logout">' + ico('lock') + 'خروج و قفل برنامه</button>' + (isNative() ? '<button class="btn ghost" data-act="toggleBio">' + (S.settings.bio ? ico('finger') + 'اثر انگشت: فعال (غیرفعال کنم)' : ico('finger') + 'فعال‌سازی ورود با اثر انگشت') + '</button>' : '') + '</div>';
   h += featuresCard() + (feat('users') || (S.settings.users || []).length ? usersCard() : '') + lockCard();
   } else h += '<div class="card"><div class="ch">' + ico('user') + 'حساب کاربری</div><p class="hint">وارد شده با: <b>' + esc(CUR.user) + '</b> (کاربر زیرمجموعه)</p><button class="btn ghost" data-act="logout">' + ico('lock') + 'خروج و قفل برنامه</button></div>';
+  next('security','حساب کاربری و دسترسی‌ها','lock','رمز، کاربران، قفل اسناد و بخش‌های برنامه');
   const left = freeLeft();
   if (isAdmin()) h += '<div class="card"><div class="ch">' + ico('star') + 'نسخه برنامه</div>' + (licOk ? '<p class="hint">' + ico('check') + licStatus() + '</p>' : licExpired() ? '<p class="hint debit">' + licStatus() + '</p>' : '<p class="hint">نسخه رایگان: ' + fa(Math.min(usedDocs(), License.FREE_LIMIT)) + ' از ' + fa(License.FREE_LIMIT) + ' فاکتور و سند استفاده شده (' + fa(left) + ' باقی‌مانده).</p>') + '<button class="btn ' + (licOk ? 'ghost' : 'blue') + '" data-act="activate">' + (licOk ? 'جزئیات نسخه نامحدود' : ico('star') + 'فعال‌سازی نسخه نامحدود') + '</button></div>';
+  next('license','اشتراک و نسخه برنامه','star','فعال‌سازی و وضعیت مجوز');
   const errN = diagLoad().length;
   h += '<div class="card"><div class="ch">' + ico('wrench') + 'گزارش خطا</div><p class="hint">اگر برنامه درست کار نکرد یا بسته شد، این گزارش را برای پشتیبانی بفرستید. فقط اطلاعات فنی (نسخه، گوشی، متن خطا) فرستاده می‌شود؛ نام اشخاص و مبالغ در آن نیست.</p><p class="hint">خطاهای ثبت‌شده: <b>' + fa(errN) + '</b></p><div class="row2"><button class="btn green" data-act="reportWa">ارسال در واتساپ</button><button class="btn ghost" data-act="reportShare">کپی / ارسال</button></div>' + (errN ? '<button class="lnk center" data-act="reportClear">پاک‌کردن خطاهای ثبت‌شده</button>' : '') + '</div>';
   h += '<div class="card"><div class="ch">' + ico('search') + 'بررسی سلامت اطلاعات</div><p class="hint">صحت ارتباط تراکنش‌ها، فاکتورها و موجودی انبار را بررسی می‌کند.</p><button class="btn ghost" data-act="audit">اجرای بررسی</button></div>';
+  next('diagnostics','سلامت اطلاعات و گزارش خطا','wrench','بررسی و پشتیبانی فنی');
   if (isAdmin()) h += '<div class="card"><div class="ch">' + ico('eraser') + 'خام کردن اطلاعات</div><p class="hint">فاکتورها، ورود کالا به انبار، دریافت و پرداخت‌ها، هزینه‌ها یا چک‌ها را پاک می‌کند تا از نو شروع کنید. <b>اشخاص و کالاها (نام، تلفن، قیمت، بارکد) پاک نمی‌شوند.</b></p><button class="btn ghost red" data-act="resetData">خام کردن اطلاعات…</button></div>';
-  if (isAdmin()) h += '<div class="card"><div class="ch">' + ico('alert') + 'حذف همه اطلاعات</div><button class="btn red" data-act="wipe">پاک‌کردن کامل برنامه</button></div><p class="hint center">تعداد: ' + fa(S.people.length) + ' شخص · ' + fa(S.products.length) + ' کالا · ' + fa(S.invoices.length) + ' فاکتور · ' + fa(S.tx.length) + ' تراکنش</p>';
-  return { title: 'تنظیمات', html: h, back: '#/more', mount: () => { bindLockCard(); if ($('#setf')) $('#setf').onsubmit = async e => { e.preventDefault(); const f = e.target, oc = S.settings.openingCash || 0; const vr = Core.parseNum(f.vatRate.value || '0'); if (isNaN(vr) || vr < 0 || vr > 100) return toast('درصد ارزش افزوده نامعتبر است.', true); S.settings.business = f.business.value.trim(); S.settings.openingCash = oc; S.settings.vatRate = vr; S.settings.fyMonth = +f.fyMonth.value || 1; const mm = Core.parseNum(f.minMargin.value || '0'); if (!isNaN(mm) && mm >= 0 && mm <= 100) S.settings.minMargin = mm; await save(); toast('ذخیره شد.'); render(); }; if ($('#restore-file')) $('#restore-file').onchange = restoreFile; if ($('#usf')) $('#usf').onsubmit = saveUserSettings; } };
+  if (isAdmin()) h += '<div class="card"><div class="ch">' + ico('alert') + 'حذف همه اطلاعات</div><button class="btn red" data-act="wipe">پاک‌کردن کامل برنامه</button></div>';
+  next('danger','عملیات حساس','alert','خام کردن یا حذف اطلاعات');
+  h += '<p class="hint center">تعداد: ' + fa(S.people.length) + ' شخص · ' + fa(S.products.length) + ' کالا · ' + fa(S.invoices.length) + ' فاکتور · ' + fa(S.tx.length) + ' تراکنش</p>';
+  return { title: section === 'backup' ? 'پشتیبان‌گیری' : 'تنظیمات', html: '<div class="menu019 settings019' + (section === 'backup' ? ' backup019-page' : '') + '">' + groups + h + '</div>', back: '#/more', mount: () => { bindLockCard(); aiBindSourceSettings(); if ($('#setf')) $('#setf').onsubmit = async e => { e.preventDefault(); const f = e.target, oc = S.settings.openingCash || 0; const vr = Core.parseNum(f.vatRate.value || '0'); if (isNaN(vr) || vr < 0 || vr > 100) return toast('درصد ارزش افزوده نامعتبر است.', true); S.settings.business = f.business.value.trim(); S.settings.openingCash = oc; S.settings.vatRate = vr; S.settings.fyMonth = +f.fyMonth.value || 1; const mm = Core.parseNum(f.minMargin.value || '0'); if (!isNaN(mm) && mm >= 0 && mm <= 100) S.settings.minMargin = mm; await save(); toast('ذخیره شد.'); render(); }; if ($('#restore-file')) $('#restore-file').onchange = restoreFile; if ($('#usf')) $('#usf').onsubmit = saveUserSettings; } };
 }
 async function doBackup(noRender) { const ok = await exportFile('fixquick-backup-' + stamp() + '.json', Core.exportJSON(S), 'application/json'); if (ok) { S.settings.lastBackup = today(); S.settings.lastBackupAt = Date.now(); await save(); toast('پشتیبان آماده شد.'); if (!noRender) render(); } return !!ok; }
 const hasDocs = () => S.invoices.length + S.tx.length + S.expenses.length + S.cheques.length + S.adjusts.length > 0;
