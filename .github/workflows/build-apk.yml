@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: [main, 'fixq-build-validation-*']
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -42,6 +42,7 @@ jobs:
           node tests/vol020.test.js
           node tests/vol022.test.js
           node tests/vol028.test.js
+          node tests/vol029.test.js
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |
@@ -68,6 +69,10 @@ jobs:
           i = s.index('<application'); s = s[:i] + add + '    ' + s[i:].lstrip() if add else s
           # Android 10: let the «ذخیره» button write into Documents/FixQuick
           if 'requestLegacyExternalStorage' not in s: s = s.replace('<application', '<application android:requestLegacyExternalStorage="true"', 1)
+          import re
+          s = re.sub(r'android:windowSoftInputMode="[^"]*"', 'android:windowSoftInputMode="adjustResize"', s)
+          if 'android:windowSoftInputMode=' not in s:
+              s = s.replace('<activity', '<activity android:windowSoftInputMode="adjustResize"', 1)
           open(f, 'w').write(s)
           PY
           grep -n "uses-" $M

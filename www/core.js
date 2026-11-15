@@ -2658,6 +2658,10 @@
     const p = [];
     const ids = new Set(); const all = [].concat(st.people, st.products, st.invoices, st.tx, st.expenses, st.cheques, st.adjusts, st.accounts || [], st.acctTx || [], st.recons || [], st.vouchers || [], st.whTx || [], st.warehouses || [], st.tafsil || [], st.combined || []);
     all.forEach(x => { if (!Number.isInteger(x.id)) p.push('شناسه نامعتبر'); else if (ids.has(x.id)) p.push('شناسه تکراری: ' + x.id); else ids.add(x.id); if (x.id >= st.seq) p.push('شمارنده شناسه عقب است'); });
+    for(const m of st.combined||[]){
+      if(!['active','void'].includes(m.status)||!Array.isArray(m.rows)||!Number.isSafeInteger(m.total)||!Number.isSafeInteger(m.applied)||m.total-m.applied!==m.remaining||m.rows.reduce((n,r)=>n+r.amount,0)!==m.applied){p.push('سند ترکیبی نامعتبر: '+m.id);continue;}
+      if(m.status==='active')for(const row of m.rows){const item=row.txId?byId(st.tx,row.txId):byId(st.cheques,row.chequeId);if(!item||item.mix!==m.id||item.amount!==row.amount)p.push('جزء سند ترکیبی ناسازگار: '+m.id);}
+    }
     st.tx.forEach(t => { if (!byId(st.people, t.personId)) p.push('تراکنش بدون شخص: ' + t.id); if (!(t.amount > 0)) p.push('مبلغ نامعتبر در تراکنش ' + t.id); if (t.kind !== 'debit' && t.kind !== 'credit') p.push('نوع نامعتبر در تراکنش ' + t.id); if (!Core.validIso(t.date)) p.push('تاریخ نامعتبر در تراکنش ' + t.id); if (t.ref && !byId(st.invoices, t.ref)) p.push('تراکنش یتیم فاکتور: ' + t.id); });
     st.invoices.forEach(i => {
       if (!byId(st.people, i.personId)) p.push('فاکتور بدون شخص: ' + i.no);
@@ -2705,7 +2709,7 @@
     if (!o || o.app !== 'fixquick-accounting' || !o.data) return err('این فایل، پشتیبان این برنامه نیست.');
     const d = o.data, base = Core.emptyState();
     for (const k of ['people', 'products', 'invoices', 'tx', 'expenses', 'cheques', 'adjusts', 'acctTx', 'recons', 'vouchers', 'whTx']) { if (d[k] === undefined) d[k] = []; if (!Array.isArray(d[k])) return err('ساختار فایل پشتیبان خراب است.'); }
-    for (const k of ['accounts', 'warehouses', 'tafsil', 'fyClosed']) if (d[k] !== undefined && !Array.isArray(d[k])) return err('ساختار فایل پشتیبان خراب است.');
+    for (const k of ['accounts', 'warehouses', 'tafsil', 'fyClosed', 'combined']) if (d[k] !== undefined && !Array.isArray(d[k])) return err('ساختار فایل پشتیبان خراب است.');
     if (d.coa !== undefined && (typeof d.coa !== 'object' || !d.coa)) return err('ساختار فایل پشتیبان خراب است.');
     d.settings = Object.assign(base.settings, d.settings || {}); d.v = 1;
     if (d.docNo !== undefined && !(d.docNo && typeof d.docNo === 'object' && typeof d.docNo.k === 'string' && !/\s\s|^\s|\s$/.test(d.docNo.k) && (d.docNo.w === undefined || Number.isFinite(d.docNo.w)))) delete d.docNo;
@@ -2713,7 +2717,7 @@
     for (const t of d.tx) if (t.method != null && !METHODS[t.method]) t.method = fixM(t.method);
     for (const e of d.expenses) if (!METHODS[e.method]) e.method = fixM(e.method);
     if (!Number.isInteger(d.seq)) d.seq = 1;
-    let maxId = 0; for (const k of ['people', 'products', 'invoices', 'tx', 'expenses', 'cheques', 'adjusts', 'accounts', 'acctTx', 'recons', 'vouchers', 'whTx', 'warehouses', 'tafsil']) for (const x of (d[k] || [])) { const v = +x.id || 0; if (v > maxId) maxId = v; }
+    let maxId = 0; for (const k of ['people', 'products', 'invoices', 'tx', 'expenses', 'cheques', 'adjusts', 'accounts', 'acctTx', 'recons', 'vouchers', 'whTx', 'warehouses', 'tafsil', 'combined']) for (const x of (d[k] || [])) { const v = +x.id || 0; if (v > maxId) maxId = v; }
     if (d.seq <= maxId) d.seq = maxId + 1;
     Core.migrate(d);
     const probs = Core.audit(d); if (probs.length) return err('فایل پشتیبان ناسازگار است: ' + probs[0]);
@@ -2977,6 +2981,7 @@
         if(!row.serial||!Core.validIso(row.dueDate)||row.dueDate<d.date||(!row.bank&&d.type==='receipt'))return err('شماره، بانک و سررسید معتبر چک لازم است.');
         row.serial=row.serial.slice(0,30);
       }
+      if(row.method==='cheque'&&st.cheques.some(c=>c.cyc&&c.direction===(d.type==='payment'?'pay':'receive')&&mixedRef(c.serial)===row.serial&&(d.type==='payment'?c.acct===row.acct:Core.norm(c.bank||'')===Core.norm(row.bank))))return err('چک با همین شماره قبلاً ثبت شده است.');
       const key=row.method==='cheque'?'chq|'+(d.type==='payment'?row.acct:Core.norm(row.bank))+'|'+row.serial:row.method==='cash'?'cash|'+row.acct+'|'+row.amount:'bank|'+row.acct+'|'+row.tracking;
       if(seen.has(key))return err('ردیف تکراری؛ مبالغ نقدی یکسان را در یک ردیف تجمیع کنید.');seen.add(key);
       sum+=row.amount;if(!Number.isSafeInteger(sum)||sum>total)return err('مجموع اجزا از مبلغ هدف بیشتر است.');rows.push(row);

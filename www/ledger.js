@@ -99,7 +99,7 @@ function docTextsReady(c) {
   setTimeout(step, 0); return false;
 }
 function docTitle(d) {
-  const r = d.ref;
+  const r = d.ref;if(r.mix){const m=Core.byId(S.combined||[],r.mix);return m?esc((m.type==='receipt'?'دریافت ترکیبی':'پرداخت ترکیبی')+' · '+personName(m.personId)):esc(d.desc);}
   if (r.inv) { const i = Core.byId(S.invoices, r.inv); if (i) return Core.DOC_KIND[i.type] + ' ' + fa(i.no) + ' · ' + esc(personName(i.personId)); }
   if (r.vch) { const v = Core.byId(S.vouchers || [], r.vch); if (v) return (v.kind === 'manual' ? 'سند دستی ' : FY_DOC(v) + ' ') + fa(v.no) + (v.desc ? ' · ' + esc(v.desc) : ''); }
   if (r.tx) { const t = Core.byId(S.tx, r.tx); if (t && (t.type === 'receipt' || t.type === 'payment')) return Core.DOC_KIND[t.type] + ' · ' + esc(personName(t.personId)); }
@@ -126,7 +126,7 @@ function docCard(ref) {
 }
 function docView(d) {
   if (d.ref.vch) return voucherView(d.ref.vch);
-  const r = d.ref, src = r.inv ? ['go', '#/inv/' + r.inv, 'مشاهده فاکتور'] : r.tx ? ['txOpen', r.tx, 'مشاهده دریافت / پرداخت'] : r.exp ? ['expOpen', r.exp, 'مشاهده هزینه'] : r.chq ? ['chqView', r.chq, 'مشاهده چک'] : r.xfer ? ['acctXferOpen', r.xfer, 'مشاهده انتقال وجه'] : null;
+  const r = d.ref, src = r.mix ? ['mixedView',r.mix,'مشاهده سند ترکیبی'] : r.inv ? ['go', '#/inv/' + r.inv, 'مشاهده فاکتور'] : r.tx ? ['txOpen', r.tx, 'مشاهده دریافت / پرداخت'] : r.exp ? ['expOpen', r.exp, 'مشاهده هزینه'] : r.chq ? ['chqView', r.chq, 'مشاهده چک'] : r.xfer ? ['acctXferOpen', r.xfer, 'مشاهده انتقال وجه'] : null;
   const sh = sheet((d.no ? 'سند حسابداری شماره ' + fa(d.no) : 'سند حسابداری') + ' · ' + Core.DOC_KIND[d.kind], '<div class="kv">' + (d.no ? '<span>شماره سند</span><b>' + fa(d.no) + '</b>' : '') + '<span>تاریخ</span><b>' + (d.date === '0000-00-00' ? 'اول دوره' : fmtDate(d.date)) + '</b><span>شرح</span><b>' + docTitle(d) + '</b></div>' + docLines([d]) +
     '<p class="hint">این سند خودکار از روی خود سند اصلی ساخته شده؛ برای تغییر، سند اصلی را ویرایش کنید.</p>' + (src ? '<button class="btn blue" data-src>' + esc(src[2]) + '</button>' : '') + '<button class="btn ghost" data-s>' + ico('share') + 'ارسال متن سند</button>');
   if (src) sh.q('[data-src]').onclick = () => { sh.close(); if (src[0] === 'go') goHash(src[1]); else actions[src[0]]({ id: String(src[1]) }); };
@@ -304,9 +304,9 @@ function chequeView(id) {
     (nx.length ? '<div class="ch">مرحله بعد</div>' + nx.map(a => '<button class="btn ' + (a === 'cleared' || a === 'paid' ? 'green' : a === 'bounced' ? 'ghost red' : 'ghost') + '" data-a="' + a + '">' + CHQ_ACT[a] + '</button>').join('') : '') +
     '<div class="row2">' + (c.hist.length > 1 ? '<button class="btn ghost" data-u>' + ico('restore') + 'برگرداندن آخرین مرحله</button>' : '<button class="btn ghost red" data-d>حذف چک</button>') + '<button class="btn ghost" data-e>' + ico('edit') + 'ویرایش</button></div>');
   sh.qa('[data-a]').forEach(b => { b.onclick = () => { sh.close(); chequeActForm(c, b.dataset.a); }; });
-  sh.q('[data-e]').onclick = () => { sh.close(); chequeForm(c); };
+  sh.q('[data-e]').onclick = () => { sh.close(); if(c.mix)return mixedView(c.mix);chequeForm(c); };
   if (sh.q('[data-u]')) sh.q('[data-u]').onclick = async () => { const l = c.hist[c.hist.length - 1]; if (!(await confirmBox('مرحله «' + Core.CHQ_FA[l.s] + '» (' + fmtDate(l.date) + ') برگردانده شود؟ اثر آن از حساب‌ها برداشته می‌شود.', 'برگردان'))) return; if (await done(Core.chequeUndo(S, c.id), 'برگردانده شد.')) sh.close(); };
-  if (sh.q('[data-d]')) sh.q('[data-d]').onclick = async () => { if (!(await confirmBox('این چک حذف شود؟ اثر آن از حساب «' + personName(c.personId) + '» برداشته می‌شود.', 'حذف', true))) return; if (await done(Core.deleteCheque(S, c.id), 'چک حذف شد.')) sh.close(); };
+  if(c.mix&&sh.q('[data-d]')){sh.q('[data-d]').textContent='مشاهده سند ترکیبی';sh.q('[data-d]').onclick=()=>{sh.close();mixedView(c.mix);};}else if (sh.q('[data-d]')) sh.q('[data-d]').onclick = async () => { if (!(await confirmBox('این چک حذف شود؟ اثر آن از حساب «' + personName(c.personId) + '» برداشته می‌شود.', 'حذف', true))) return; if (await done(Core.deleteCheque(S, c.id), 'چک حذف شد.')) sh.close(); };
 }
 // A single cheque-box picker is reused everywhere we spend a received cheque.
 // Filters include serial, amount, person and bank; sorting never mutates saved data.
