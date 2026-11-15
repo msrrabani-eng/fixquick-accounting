@@ -41,15 +41,6 @@ function pageHome() {
     (!x.kind.startsWith('warehouse') || can('warehouse')));
   if(drafts.length) h += '<div class="card"><div class="ch">' + ico('file') + 'عملیات نیمه‌تمام (' + fa(drafts.length) + ')</div><p class="hint">این موارد هنوز در حسابداری ثبت نشده‌اند و می‌توانید از همان‌جا ادامه دهید.</p>' + drafts.slice(0,8).map(d =>
     '<div class="row draft-item"><button type="button" class="lnk" data-act="resumeDraft" data-k="' + esc(d.kind) + '"><b>' + esc(draftNames[d.kind] || 'ویرایش فاکتور') + '</b><small>ادامه از آخرین مرحله</small></button><button type="button" class="mini" data-act="discardDraft" data-k="' + esc(d.kind) + '">حذف</button></div>').join('') + '</div>';
-  // short summary; numbers can be hidden with the eye
-  const n = v => (hide ? '<span class="mask">••••••</span>' : fmt(v));
-  const tr = Core.report(S, t, t), sales = S.invoices.filter(i => i.date === t && i.type === 'sale').length, rows = [];
-  rows.push(['#/invoices', 'receipt', 'فروش امروز', fa(sales) + ' فاکتور', sales ? n(tr.revenue) : '', '']);
-  if (can('cost') && can('reports')) rows.push(['plGo', 'up', 'سود امروز', '', n(tr.net), tr.net < 0 ? 'debit' : tr.net > 0 ? 'credit' : '']);
-  if (can('balances')) { const rp = Core.receivablePayable(S); rows.push(['debit', 'in', 'حساب‌های دریافتنی', 'طلب از مشتریان', n(rp.receivable), '']); rows.push(['credit', 'out', 'حساب‌های پرداختنی', 'بدهی به دیگران', n(rp.payable), '']); }
-  if (can('reports')) { const c = Core.cashBalance(S); rows.push(['#/accounts', 'wallet', 'موجودی صندوق و بانک', '', n(c), c < 0 ? 'debit' : '']); }
-  h += '<div class="card hsum"><div class="ch">' + ico('calendar') + 'خلاصه حساب<button class="eye" data-act="homeHide" aria-label="' + (hide ? 'نمایش مبالغ' : 'پنهان کردن مبالغ') + '">' + ico(hide ? 'eyeoff' : 'eye') + '</button></div>' +
-    rows.map(r => '<button class="hrow" ' + (r[0][0] === '#' ? 'data-act="go" data-h="' + r[0] + '"' : r[0] === 'plGo' ? 'data-act="plGo" data-k="today"' : 'data-act="homePeople" data-f="' + r[0] + '"') + '>' + ico(r[1]) + '<span>' + r[2] + (r[3] ? ' <small>' + r[3] + '</small>' : '') + '</span><b class="' + r[5] + '">' + r[4] + '</b></button>').join('') + '</div>';
   if (guide) h += '<details class="ui2-home-more"><summary>' + ico('help') + 'راهنمای شروع کار</summary>' + guide + '</details>';
   // only what needs attention
   const chq = feat('cheques') ? S.cheques.filter(c => !c.done && c.dueDate <= Core.addDays(t, 2)) : [], od = chq.filter(c => c.dueDate < t).length, re = Core.stockInsights(S, t).reorder.length;
@@ -68,6 +59,18 @@ function pageHome() {
   const errs = diagLoad(); let seen = 0; try { seen = +localStorage.getItem('fq_err_seen') || 0; } catch (e) { /* ignore */ }
   if (errs.length > seen) h = '<div class="alert warn">' + ico('alert') + 'برنامه با خطا روبه‌رو شده است. لطفاً گزارش را بفرستید تا برطرف شود. <button class="lnk" data-act="reportWa">ارسال گزارش</button> <button class="lnk" data-act="errSeen">بستن</button></div>' + h;
   return { title: S.settings.business || 'حسابداری فیکس کوییک', html: h };
+}
+function pageAccountSummary(){
+  const t=today(),hide=homeHidden(); let h='';
+  const n = v => (hide ? '<span class="mask">••••••</span>' : fmt(v));
+  const tr = Core.report(S, t, t), sales = S.invoices.filter(i => i.date === t && i.type === 'sale').length, rows = [];
+  rows.push(['#/invoices', 'receipt', 'فروش امروز', fa(sales) + ' فاکتور', sales ? n(tr.revenue) : '', '']);
+  if (can('cost') && can('reports')) rows.push(['plGo', 'up', 'سود امروز', '', n(tr.net), tr.net < 0 ? 'debit' : tr.net > 0 ? 'credit' : '']);
+  if (can('balances')) { const rp = Core.receivablePayable(S); rows.push(['debit', 'in', 'حساب‌های دریافتنی', 'طلب از مشتریان', n(rp.receivable), '']); rows.push(['credit', 'out', 'حساب‌های پرداختنی', 'بدهی به دیگران', n(rp.payable), '']); }
+  if (can('reports')) { const c = Core.cashBalance(S); rows.push(['#/accounts', 'wallet', 'موجودی صندوق و بانک', '', n(c), c < 0 ? 'debit' : '']); }
+  h += '<div class="card hsum"><div class="ch">' + ico('calendar') + 'خلاصه حساب<button class="eye" data-act="homeHide" aria-label="' + (hide ? 'نمایش مبالغ' : 'پنهان کردن مبالغ') + '">' + ico(hide ? 'eyeoff' : 'eye') + '</button></div>' +
+    rows.map(r => '<button class="hrow" ' + (r[0][0] === '#' ? 'data-act="go" data-h="' + r[0] + '"' : r[0] === 'plGo' ? 'data-act="plGo" data-k="today"' : 'data-act="homePeople" data-f="' + r[0] + '"') + '>' + ico(r[1]) + '<span>' + r[2] + (r[3] ? ' <small>' + r[3] + '</small>' : '') + '</span><b class="' + r[5] + '">' + r[4] + '</b></button>').join('') + '</div>';
+  return {title:'خلاصه حساب',html:h,back:'#/more'};
 }
 function homeHidden() { try { return localStorage.getItem('fq_hide') === '1'; } catch (e) { return false; } }
 function invNotes(i) { return [i.note].concat((i.items || []).map(l => l.note)).filter(Boolean); }
@@ -281,7 +284,7 @@ function rangeSheet(key) {
   sh.q('#rg').onsubmit = e => { e.preventDefault(); apply(readDate(sh.q('#rg'), 'rgf'), readDate(sh.q('#rg'), 'rgt')); };
 }
 // search box with a × that clears it in one tap
-function sbox(id, key, ph, val) { return '<div class="pwrap sbox"><input class="inp" id="' + id + '" placeholder="' + ph + '" value="' + esc(val || '') + '" autocomplete="off"><button type="button" class="pclr" data-act="clrQ" data-k="' + key + '" data-id="' + id + '" aria-label="پاک‌کردن جستجو">' + ico('x') + '</button></div>'; }
+function sbox(id, key, ph, val) { return '<div class="pwrap sbox"><input class="inp" id="' + id + '" placeholder="' + ph + '" value="' + esc(val || '') + '" autocomplete="off" data-search-field><button type="button" class="pclr" data-act="clrQ" data-k="' + key + '" data-id="' + id + '" aria-label="پاک‌کردن جستجو">' + ico('x') + '</button></div>'; }
 // date range for a person's statement; the same range is used on the page and in the PDF
 function stmtSheet(pid) {
   const sh = sheet('بازه صورت‌حساب', '<form id="sr">' + dateField('f', UI.stmtFrom || Core.periodRange('month').from, 'از تاریخ') + dateField('t', UI.stmtTo || today(), 'تا تاریخ') + '<div class="row2"><button class="btn ghost" type="button" id="sr-ok">اعمال روی صفحه</button><button class="btn blue" type="button" id="sr-pdf">' + ico('file') + 'ساخت PDF</button></div><p class="hint">PDF همین بازه را می‌سازد. برای همه تراکنش‌ها، تاریخ اول را خیلی قدیمی بگذارید.</p></form>');
@@ -713,7 +716,8 @@ function pageMore() {
     routeAllowed('vouchers') && row('file', 'اسناد حسابداری', '#/vouchers', 'سند همه فاکتورها، دریافت و پرداخت‌ها، چک‌ها و سند دستی'),
     isAdmin() && row('listplus', 'کدینگ حساب‌ها', '#/coa', 'گروه، کل، معین و تفصیلی'),
     isAdmin() && row('lock', 'سال مالی و بستن حساب‌ها', '#/fiscal', (S.fyClosed || []).length ? 'آخرین سال بسته‌شده: ' + fa((S.fyClosed || []).reduce((m, y) => (y.label > m ? y.label : m), '')) : 'بستن سال، اسناد اختتامیه و افتتاحیه')]);
-  if (can('reports')) h += sec('گزارش‌ها', 'chart', [
+  if (can('reports')) h += sec('گزارش‌های مالی', 'chart', [
+    row('wallet', 'خلاصه حساب', '#/summary', 'فروش، سود، مطالبات، بدهی و موجودی'),
     row('chart', 'همه گزارش‌ها', '#/reports', 'صورت‌های مالی، فروش، اشخاص، خزانه و انبار'),
     cost && row('chart', 'صورت سود و زیان', '#/reports/pl'),
     cost && row('scale', 'تراز آزمایشی', '#/reports/tb'),
@@ -721,17 +725,14 @@ function pageMore() {
   h += sec('انبار و موجودی', 'package', [
     can('warehouse') && row('transfer', 'انبارها و انتقال بین انبارها', '#/warehouses', Core.multiWh(S) ? fa(Core.whList(S).filter(w => !w.archived).length) + ' انبار' : 'تعریف انبار دوم و انتقال کالا'),
     row('up', 'تحلیل انبار', '#/stock', 'کمبود، راکد و پیشنهاد سفارش')]);
-  return { title: 'بیشتر', html: h + menu019Group('پشتیبانی و خروج', 'phone', aboutCard() + ((isNative() || DESK) ? row('exit', 'خروج از برنامه', 'exitApp') : ''), '', 'واتساپ، تماس و وب‌سایت') + '</div><p class="hint center">حسابداری فیکس کوییک · نسخه ' + fa(APP_VER) + (curName() ? ' · کاربر: ' + esc(curName()) + (isAdmin() ? ' (مدیر)' : '') : '') + '</p>' };
+  return { title: 'بیشتر', html: h + menu019Group('پشتیبانی و خروج', 'phone', row('phone','پشتیبانی فیکس کوییک','#/support','ارتباط، گزارش مشکل و پیشنهاد') + ((isNative() || DESK) ? row('exit', 'خروج از برنامه', 'exitApp') : ''), '', 'واتساپ، تماس و وب‌سایت') + '</div><p class="hint center">حسابداری فیکس کوییک · نسخه ' + fa(APP_VER) + (curName() ? ' · کاربر: ' + esc(curName()) + (isAdmin() ? ' (مدیر)' : '') : '') + '</p>' };
 }
 function aboutCard() {
-  const lnk = (ic, t, s, u) => '<a class="ab-row" href="' + u + '" target="_blank" rel="noopener"><i>' + ic + '</i><span><b>' + t + '</b><small>' + s + '</small></span><em>‹</em></a>';
-  return '<div class="card about"><div class="ab-h"><img src="logo.png" alt=""><div><b>پشتیبانی فیکس کوییک</b><small>سؤال یا مشکلی داشتید؟ در واتساپ پیام بدهید؛ در خدمتیم.</small></div></div>' +
-    lnk(ico('chat'), 'واتساپ پشتیبانی', Core.toFa('09999917199'), 'https://wa.me/989999917199') +
-    lnk(ico('phone'), 'تماس تلفنی', Core.toFa('09999917199'), 'tel:09999917199') +
-    lnk(ico('globe'), 'وب‌سایت', 'fixq.ir', 'https://fixq.ir') +
-    lnk(ico('insta'), 'اینستاگرام', '@fixq.ir', 'https://instagram.com/fixq.ir') +
-    '<div class="ab-f">با مدیریت <b>محمد صادق ربانی</b><small>طراح و صاحب امتیاز برنامه</small></div></div>';
+  const wa='https://wa.me/989999917199';
+  const lnk=(ic,t,s,u)=>'<a class="fq-support-link" href="'+esc(u)+'" target="_blank" rel="noopener noreferrer"><i>'+ico(ic)+'</i><span><b>'+esc(t)+'</b><small dir="auto">'+esc(s)+'</small></span><em>‹</em></a>';
+  return '<section class="card fq-support" dir="rtl"><header class="fq-support-head"><img src="logo.png" alt="لوگوی فیکس کوییک"><div><b>پشتیبانی فیکس کوییک</b><small>حسابداری فیکس کوییک · نسخه '+fa(APP_VER)+'</small></div></header><div class="fq-support-links">'+lnk('chat','واتساپ','09999917199',wa)+lnk('phone','تماس تلفنی','09999917199','tel:09999917199')+lnk('globe','وب‌سایت','fixq.ir','https://fixq.ir')+lnk('insta','اینستاگرام','@fixq.ir','https://instagram.com/fixq.ir')+'</div><div class="fq-support-actions">'+lnk('alert','گزارش مشکل','ارسال پیام در واتساپ',wa+'?text='+encodeURIComponent('سلام، گزارش مشکل حسابداری فیکس کوییک — نسخه '+APP_VER+': '))+lnk('chat','ارسال پیشنهاد','ارسال پیام در واتساپ',wa+'?text='+encodeURIComponent('سلام، پیشنهاد برای حسابداری فیکس کوییک: '))+'</div><footer class="fq-support-credit"><b>محمد صادق ربانی</b><small>طراح و صاحب امتیاز نرم‌افزار<br>حسابداری فیکس کوییک</small></footer></section>';
 }
+function pageSupport(){return {title:'پشتیبانی',html:aboutCard(),back:'#/more'};}
 function pageSettings(section) {
   if(section === 'backup' && !can('backup')) return {title:'دسترسی محدود',html:empty(ico('lock'),'برای پشتیبان‌گیری مجوز ندارید.'),back:'#/more'};
   const days = S.settings.lastBackup ? Core.diffDays(S.settings.lastBackup, today()) : null;
@@ -964,10 +965,11 @@ function personFormInline() { // quick-add from invoice picker
 
 /* ─────────── router / shell ─────────── */
 const routes = {
+  summary: pageAccountSummary, support: pageSupport,
   home: pageHome, people: pagePeople, person: pagePerson, invoices: pageInvoices, inv: pageInvoice, edit: (a) => { const i = Core.byId(S.invoices, +a); return i ? pageNewInvoice(i.type, { edit: i }) : { title: 'ویرایش', html: empty(ico('help'), 'فاکتور پیدا نشد.'), back: '#/invoices' }; }, new: (a) => pageNewInvoice(a, Object.fromEntries(new URLSearchParams((location.hash.split('?')[1]) || ''))),
   search: pageSearch, assistant: pageSmartAssistant, safety: pageSafety, products: pageProducts, stock: pageStock, kardex: pageKardex, cheques: pageCheques, expenses: pageExpenses, reports: pageReports, more: pageMore, settings: pageSettings, accounts: pageAccounts, acct: pageAcct, recon: pageRecon, vouchers: pageVouchers, coa: pageCoa, fiscal: pageFiscal, warehouses: pageWarehouses, wh: pageWh
 };
-const navMap = { assistant: 'home', safety: 'home', vouchers: 'more', coa: 'more', fiscal: 'more', warehouses: 'products', wh: 'products', search: 'home', home: 'home', people: 'people', person: 'people', invoices: 'invoices', inv: 'invoices', edit: 'invoices', new: 'invoices', products: 'products', stock: 'products', kardex: 'products', more: 'more', cheques: 'more', expenses: 'more', reports: 'more', settings: 'more', accounts: 'more', acct: 'more', recon: 'more' };
+const navMap = { summary:'more', support:'more', assistant: 'home', safety: 'home', vouchers: 'more', coa: 'more', fiscal: 'more', warehouses: 'products', wh: 'products', search: 'home', home: 'home', people: 'people', person: 'people', invoices: 'invoices', inv: 'invoices', edit: 'invoices', new: 'invoices', products: 'products', stock: 'products', kardex: 'products', more: 'more', cheques: 'more', expenses: 'more', reports: 'more', settings: 'more', accounts: 'more', acct: 'more', recon: 'more' };
 let lastRoute = '';
 // update the page around a text box the user is typing in, without ever touching that box
 // (re-creating it drops letters on Android keyboards that are still composing a word)
@@ -998,6 +1000,7 @@ function render(opt) {
   main.dataset.page = routeAllowed(page) ? page : 'restricted';
   if (res.mount) res.mount();
   ui2Mount(main, page);
+  if(typeof refreshSearchViewport==='function')refreshSearchViewport();
 }
 // what a sub-user may open / press
 function routeAllowed(page) {
@@ -1006,7 +1009,7 @@ function routeAllowed(page) {
   if (FEAT_ROUTE[page] && !feat(FEAT_ROUTE[page])) return false;
   if (isAdmin()) return true;
   const arg = (location.hash || '').split('?')[0].split('/')[2] || '';
-  if (page === 'reports') return can('reports');
+  if (page === 'reports' || page === 'summary') return can('reports');
   if (page === 'accounts' || page === 'acct') return can('reports');
   if (page === 'recon') return can('reports') && can('money');
   if (page === 'vouchers') return can('money') && can('cost');
@@ -1021,7 +1024,7 @@ const ACT_PERM = { openImport: d => (d.k === 'stock' ? 'warehouse' : 'people'), 
 function actAllowed(el) {
   if (isAdmin()) return true; const a = el.dataset.act, np = ACT_PERM[a], need = typeof np === 'function' ? np(el.dataset) : np;
   if (need) return need === 'admin' ? false : can(need);
-  if (a === 'go') { const h = el.dataset.h || ''; if (h.startsWith('#/reports')) return can('reports'); if (h.startsWith('#/edit/')) return can('edit'); if (h.startsWith('#/kardex/')) return can('cost'); if (/^#\/new\/purchase/.test(h)) return can('purchase'); }
+  if (a === 'go') { const h = el.dataset.h || ''; if (h.startsWith('#/reports') || h==='#/summary') return can('reports'); if (h.startsWith('#/edit/')) return can('edit'); if (h.startsWith('#/kardex/')) return can('cost'); if (/^#\/new\/purchase/.test(h)) return can('purchase'); }
   if (a === 'newInv' && (el.dataset.t === 'purchase' || el.dataset.t === 'purchase_return')) return can('purchase');
   return true;
 }

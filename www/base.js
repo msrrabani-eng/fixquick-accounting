@@ -133,7 +133,7 @@ function pickList(title, items, onPick, o) {
   if (o.cats) { const m = new Map(); items.forEach(i => m.set(i.cat, (m.get(i.cat) || 0) + 1)); cats = [...m.entries()].sort((a, b) => Core.catRank(a[0]) - Core.catRank(b[0]) || faCmp(a[0], b[0])); cat = UI.pickCat && m.has(UI.pickCat) ? UI.pickCat : ''; }
   const TOP = '__top', top = (o.top || []).map(String); if (top.length) { cats.unshift([TOP, top.length]); cat = TOP; }
   const chipRow = () => cats.length > 1 || top.length ? '<div class="chips cats" id="pk-c">' + [['', items.length]].concat(cats).map(c => '<button type="button" class="chip' + (c[0] === cat ? ' on' : '') + (c[0] === TOP ? ' top' : '') + '" data-c="' + esc(c[0]) + '">' + esc(c[0] === TOP ? '★ ' + (o.topLabel || 'پرتکرارها') : c[0] || 'همه') + ' <i>' + Core.toFa(c[1]) + '</i></button>').join('') + '</div>' : '';
-  const sh = sheet(title, '<input class="inp" id="pk-s" placeholder="جستجو…" autocomplete="off">' + (o.addNew ? '<button class="btn ghost" id="pk-new" type="button">+ ' + esc(o.addNew) + '</button>' : '') + '<div id="pk-cw">' + chipRow() + '</div><div class="list" id="pk-l"></div>', { tall: true });
+  const sh = sheet(title, '<input class="inp" id="pk-s" data-search-field placeholder="جستجو…" autocomplete="off">' + (o.addNew ? '<button class="btn ghost" id="pk-new" type="button">+ ' + esc(o.addNew) + '</button>' : '') + '<div id="pk-cw">' + chipRow() + '</div><div class="list" id="pk-l"></div>', { tall: true });
   const draw = () => {
     const q = sh.q('#pk-s').value.trim();
     let all = items.filter(i => (!cat || (q && cat === TOP) || (cat === TOP ? top.includes(String(i.value)) : i.cat === cat)) && (!q || matchQ(i.label + ' ' + (i.sub || '') + ' ' + (i.cat || ''), q)));

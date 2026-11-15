@@ -2088,8 +2088,8 @@
     st.tx.forEach(t => {
       if (t.type === 'invoice' || t.type === 'voucher' || t.type === 'chq') return; // vouchers and cheques post their own lines below
       if (t.type === 'transfer') { const g = groups.get(t.group) || []; g.push(t); groups.set(t.group, g); return; }
-      if (!want('tx', t.id)) return;
-      const pr = P(t.personId), ref = { tx: t.id };
+      if (t.mix ? !want('mix', t.mix) : !want('tx', t.id)) return;
+      const pr = P(t.personId), ref = t.mix ? {mix:t.mix} : { tx: t.id };
       if (t.type === 'receipt') add(t.date, t.desc || 'دریافت', [[acc(t.acct != null ? t.acct : acctFor(st, null, t.method).id), t.amount, 0], [pr, 0, t.amount]], ref);
       else if (t.type === 'payment') add(t.date, t.desc || 'پرداخت', [[pr, t.amount, 0], [acc(t.acct != null ? t.acct : acctFor(st, null, t.method).id), 0, t.amount]], ref);
       else if (t.type === 'opening') add(t.date, 'مانده اول دوره ' + ((byId(st.people, t.personId) || {}).name || ''), t.kind === 'debit' ? [[pr, t.amount, 0], ['3101', 0, t.amount]] : [['3101', t.amount, 0], [pr, 0, t.amount]], ref);
@@ -2102,14 +2102,15 @@
     (st.acctTx || []).forEach(x => { if (!want('xfer', x.id)) return; add(x.date, 'انتقال وجه' + (x.desc ? ' - ' + x.desc : ''), [[acc(x.to), x.amount, 0], [acc(x.from), 0, x.amount]], { xfer: x.id }); if (x.fee) add(x.date, 'کارمزد انتقال وجه', [['6200', x.fee, 0], [acc(x.from), 0, x.fee]], { xfer: x.id }); });
     // «اختتامیه» and «افتتاحیه» cancel each other and are listed (o.yearEnd) but never summed: every balance is the balance before the closing entry, as in any standard ledger
     (st.vouchers || []).forEach(v => { const ye = v.kind === 'yclose' || v.kind === 'yopen'; if ((ye && !o.yearEnd) || (o.noClosing && v.kind === 'closing') || !want('vch', v.id)) return; add(v.date, (v.kind === 'manual' ? 'سند دستی ' + v.no + ' - ' : '') + (v.desc || ''), v.lines.map(l => [l.acc, l.dr, l.cr]), { vch: v.id }, v.kind === 'yopen' ? -1 : v.kind === 'closing' ? (v.step || 1) : v.kind === 'yclose' ? 3 : 0); });
-    st.cheques.forEach(c => { if (c.cyc && want('chq', c.id)) chequeEntries(st, c).forEach(e => add(e.date, e.desc, e.lines, { chq: c.id })); });
+    st.cheques.forEach(c => { if (c.cyc) chequeEntries(st, c).forEach((e,k) => {const mixed=c.mix&&k===0; if(mixed?want('mix',c.mix):want('chq',c.id))add(e.date,e.desc,e.lines,mixed?{mix:c.mix}:{chq:c.id});}); });
     // same day: the opening entry first; closing temporary accounts, moving the profit, then the closing entry last
     return E.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.rk || 0) - (b.rk || 0)));
   };
   // ── accounting documents (اسناد حسابداری): journal entries grouped by the document that made them ──
   Core.DOC_KIND = { sale: 'فاکتور فروش', purchase: 'فاکتور خرید', sale_return: 'برگشت از فروش', purchase_return: 'برگشت از خرید', receipt: 'دریافت', payment: 'پرداخت', transfer: 'حواله', opening: 'اول دوره', manual: 'ثبت دستی', expense: 'هزینه', xfer: 'انتقال وجه', adjust: 'انبار', voucher: 'سند دستی', closing: 'بستن حساب‌های موقت', yclose: 'سند اختتامیه', yopen: 'سند افتتاحیه', cheque: 'چک' };
-  const refKey = r => (r.inv ? 'inv' + r.inv : r.tx ? 'tx' + r.tx : r.exp ? 'exp' + r.exp : r.xfer ? 'xfer' + r.xfer : r.adj ? 'adj' + r.adj : r.vch ? 'vch' + r.vch : r.chq ? 'chq' + r.chq : r.acct ? 'acct' + r.acct : 'open');
+  const refKey = r => (r.mix ? 'mix'+r.mix : r.inv ? 'inv' + r.inv : r.tx ? 'tx' + r.tx : r.exp ? 'exp' + r.exp : r.xfer ? 'xfer' + r.xfer : r.adj ? 'adj' + r.adj : r.vch ? 'vch' + r.vch : r.chq ? 'chq' + r.chq : r.acct ? 'acct' + r.acct : 'open');
   const docKind = (st, r) => {
+    if(r.mix){const m=byId(st.combined||[],r.mix);return m?.type==='payment'?'payment':'receipt';}
     if (r.inv) { const i = byId(st.invoices, r.inv); return i ? i.type : 'sale'; }
     if (r.tx) { const t = byId(st.tx, r.tx); return !t ? 'manual' : t.type === 'receipt' || t.type === 'payment' || t.type === 'transfer' || t.type === 'opening' ? t.type : 'manual'; }
     if (r.exp) return 'expense'; if (r.xfer) return 'xfer'; if (r.adj) { const a = byId(st.adjusts, r.adj); return a && a.opening ? 'opening' : 'adjust'; }
@@ -2149,6 +2150,7 @@
   const tgCache = new WeakMap(), txGroups = st => { let c = tgCache.get(st.tx); if (!c || c.len !== st.tx.length) { const m = new Map(); st.tx.forEach(x => { if (x.group) { if (!m.has(x.group)) m.set(x.group, []); m.get(x.group).push(x); } }); c = { len: st.tx.length, m }; tgCache.set(st.tx, c); } return c.m; };
   Core.docText = function (st, d) {
     const r = d.ref, P = id => (byId(st.people, id) || {}).name || '', parts = [Core.DOC_KIND[d.kind], d.no ? 'سند ' + d.no : ''];
+    if(r.mix){const m=byId(st.combined||[],r.mix);if(m){parts.push('ترکیبی',P(m.personId),m.desc,m.total,m.applied,m.remaining);m.rows.forEach(x=>parts.push(x.tracking||'',x.serial||'',x.bank||'',x.amount,x.note||''));}}
     d.entries.forEach(e => { parts.push(e.desc); e.lines.forEach(l => { parts.push(Core.accName(st, l.acc), keyCode(l.acc, l.dr - l.cr), l.dr || '', l.cr || ''); }); });
     if (r.inv) { const i = byId(st.invoices, r.inv); if (i) { const t = Core.invoiceTotals(i); parts.push(i.no, P(i.personId), i.note || '', t.total, i.discount || '', i.paid || '', i.by || ''); i.items.forEach(l => parts.push((byId(st.products, l.productId) || {}).name || '', l.note || '', l.price, l.qty)); } }
     if (r.tx) { const t = byId(st.tx, r.tx); if (t) { parts.push(P(t.personId), t.desc || '', t.note || '', t.amount, t.by || ''); if (t.group) (txGroups(st).get(t.group) || []).forEach(x => { if (x !== t) parts.push(P(x.personId)); }); } }
@@ -2654,7 +2656,7 @@
   /* ───────────── integrity / backup ───────────── */
   Core.audit = function (st) {
     const p = [];
-    const ids = new Set(); const all = [].concat(st.people, st.products, st.invoices, st.tx, st.expenses, st.cheques, st.adjusts, st.accounts || [], st.acctTx || [], st.recons || [], st.vouchers || [], st.whTx || [], st.warehouses || [], st.tafsil || []);
+    const ids = new Set(); const all = [].concat(st.people, st.products, st.invoices, st.tx, st.expenses, st.cheques, st.adjusts, st.accounts || [], st.acctTx || [], st.recons || [], st.vouchers || [], st.whTx || [], st.warehouses || [], st.tafsil || [], st.combined || []);
     all.forEach(x => { if (!Number.isInteger(x.id)) p.push('شناسه نامعتبر'); else if (ids.has(x.id)) p.push('شناسه تکراری: ' + x.id); else ids.add(x.id); if (x.id >= st.seq) p.push('شمارنده شناسه عقب است'); });
     st.tx.forEach(t => { if (!byId(st.people, t.personId)) p.push('تراکنش بدون شخص: ' + t.id); if (!(t.amount > 0)) p.push('مبلغ نامعتبر در تراکنش ' + t.id); if (t.kind !== 'debit' && t.kind !== 'credit') p.push('نوع نامعتبر در تراکنش ' + t.id); if (!Core.validIso(t.date)) p.push('تاریخ نامعتبر در تراکنش ' + t.id); if (t.ref && !byId(st.invoices, t.ref)) p.push('تراکنش یتیم فاکتور: ' + t.id); });
     st.invoices.forEach(i => {
@@ -2933,6 +2935,109 @@
   Core.importProducts = function (st, items, o) { if (o && o.stock && (st.fyClosed || []).length && items.some(x => x.stock > 0)) return closedErr(st); return prevImportProducts(st, items, o); };
   const prevDeleteAccount = Core.deleteAccount;
   Core.deleteAccount = function (st, id) { if ((st.fyClosed || []).length) return closedErr(st); return prevDeleteAccount(st, id); };
+
+
+  /* v029 mixed receipts/payments. One JSON transaction; every posted component uses
+     the established cash/cheque ledger and a shared stable document reference.
+     Account balance is the unpaid remainder, never a second financial posting. */
+  const copyMixed=x=>JSON.parse(JSON.stringify(x));
+  const mixOf=(st,id)=>byId(st.combined||[],id);
+  const mixRaw={addInvoice:Core.addInvoice,editInvoice:Core.editInvoice,deleteInvoice:Core.deleteInvoice,addTx:Core.addTx,editTx:Core.editTx,deleteTx:Core.deleteTx,addCheque:Core.addCheque,editCheque:Core.editCheque,deleteCheque:Core.deleteCheque,docsOf:Core.docsOf};
+  const mixedText=v=>Core.toEn(String(v||'')).trim().slice(0,200);
+  const mixedRef=v=>mixedText(v).replace(/\s+/g,'').toUpperCase();
+  const mixFail=()=>err('این ردیف متعلق به سند ترکیبی است؛ خود سند ترکیبی را اصلاح یا ابطال کنید.');
+  function mixedOnCopy(st,fn){
+    const draft=copyMixed(st);try{const r=fn(draft);if(!r.ok)return r;Object.assign(st,draft);return r;}catch(e){return err('عملیات ترکیبی کامل نشد: '+String(e?.message||e));}
+  }
+  function mixBuild(st,d,existing){
+    if(!d||!['receipt','payment'].includes(d.type)||!byId(st.people,+d.personId)||!Core.validIso(d.date)||inClosed(st,d.date))return err('نوع، شخص یا تاریخ عملیات معتبر نیست.');
+    let total=d.total;
+    const inv=d.invoiceId?byId(st.invoices,+d.invoiceId):null;
+    if(d.invoiceId){
+      if(!inv||inv.personId!==+d.personId||PAY_KIND[inv.type]!== (d.type==='receipt'?'credit':'debit'))return err('فاکتور مرتبط با نوع عملیات سازگار نیست.');
+      total=Core.invoiceInfo(st,inv).remaining;
+    }
+    if(!Number.isSafeInteger(total)||total<=0||total>MAX_MONEY)return err('مبلغ هدف معتبر نیست.');
+    if(!Array.isArray(d.rows)||!d.rows.length||d.rows.length>100)return err('حداقل یک ردیف دریافت یا پرداخت وارد کنید (حداکثر ۱۰۰).');
+    const rows=[],seen=new Set();let sum=0;
+    for(const raw of d.rows){
+      if(!raw||!['cash','pos','bank','cheque'].includes(raw.method)||!Number.isSafeInteger(raw.amount)||raw.amount<=0||raw.amount>MAX_MONEY)return err('مبلغ یا روش یکی از ردیف‌ها نامعتبر است.');
+      const row={method:raw.method,amount:raw.amount,acct:null,tracking:mixedRef(raw.tracking),serial:mixedRef(raw.serial),bank:mixedText(raw.bank),branch:mixedText(raw.branch),drawer:mixedText(raw.drawer),dueDate:raw.dueDate||null,note:mixedText(raw.note),time:mixedText(raw.time),bankFrom:mixedText(raw.bankFrom),bankTo:mixedText(raw.bankTo)};
+      if(row.method!=='cheque'||d.type==='payment'){
+        const acct=byId(ensureAcct(st),+raw.acct);
+        if(!acct||acct.archived||acct.kind!==(row.method==='cash'?'cash':'bank'))return err('برای هر ردیف حساب فعال و متناسب با روش انتخاب کنید.');
+        row.acct=acct.id;
+      }
+      if(row.method==='pos'||row.method==='bank'){
+        if(!row.tracking)return err('کد پیگیری هر کارت‌خوان یا واریز بانکی الزامی است.');
+        if(st.tx.some(t=>t.acct===row.acct&&t.tracking&&mixedRef(t.tracking)===row.tracking))return err('کد پیگیری در این حساب قبلاً ثبت شده است.');
+        if(row.time&&!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(row.time))return err('ساعت حواله معتبر نیست.');
+      }
+      if(row.method==='cheque'){
+        if(!row.serial||!Core.validIso(row.dueDate)||row.dueDate<d.date||(!row.bank&&d.type==='receipt'))return err('شماره، بانک و سررسید معتبر چک لازم است.');
+        row.serial=row.serial.slice(0,30);
+      }
+      const key=row.method==='cheque'?'chq|'+(d.type==='payment'?row.acct:Core.norm(row.bank))+'|'+row.serial:row.method==='cash'?'cash|'+row.acct+'|'+row.amount:'bank|'+row.acct+'|'+row.tracking;
+      if(seen.has(key))return err('ردیف تکراری؛ مبالغ نقدی یکسان را در یک ردیف تجمیع کنید.');seen.add(key);
+      sum+=row.amount;if(!Number.isSafeInteger(sum)||sum>total)return err('مجموع اجزا از مبلغ هدف بیشتر است.');rows.push(row);
+    }
+    const fingerprint=JSON.stringify([d.type,+d.personId,d.date,inv?.id||null,total,rows.map(x=>[x.method,x.acct,x.amount,x.serial,x.tracking,Core.norm(x.bank),x.dueDate]).map(JSON.stringify).sort()]);
+    if((st.combined||[]).some(m=>m.status==='active'&&m.fingerprint===fingerprint&&m.id!==existing?.id))return err('سند ترکیبی یکسان قبلاً ثبت شده است.');
+    const m={id:existing?existing.id:nid(st),type:d.type,personId:+d.personId,date:d.date,desc:mixedText(d.desc),total,applied:sum,remaining:total-sum,invoiceId:inv?.id||null,status:'active',rows,fingerprint,history:existing?existing.history||[]:[]};
+    for(const row of rows){
+      const desc=(d.type==='receipt'?'دریافت ترکیبی':'پرداخت ترکیبی')+' #'+m.id+(m.desc?' - '+m.desc:'')+(row.tracking?' - کد پیگیری '+row.tracking:'');
+      if(row.method==='cheque'){
+        const r=mixRaw.addCheque(st,{cycle:true,kind:'cheque',direction:d.type==='receipt'?'receive':'pay',personId:m.personId,invoiceId:m.invoiceId,date:m.date,amount:row.amount,dueDate:row.dueDate,serial:row.serial,bank:row.bank,branch:row.branch,drawer:row.drawer,acct:row.acct,note:row.note,title:desc});
+        if(!r.ok)return r;r.cheque.mix=m.id;row.chequeId=r.cheque.id;
+      }else{
+        const r=mixRaw.addTx(st,{personId:m.personId,type:m.type,date:m.date,amount:row.amount,acct:row.acct,desc,ref:m.invoiceId});
+        if(!r.ok)return r;Object.assign(r.tx,{mix:m.id,paymentChannel:row.method,tracking:row.tracking,bankFrom:row.bankFrom,bankTo:row.bankTo,bankTime:row.time,note:row.note});row.txId=r.tx.id;
+      }
+    }
+    st.combined=(st.combined||[]).filter(x=>x.id!==m.id);st.combined.push(m);return ok({combined:m});
+  }
+  Core.addCombined=(st,d)=>mixedOnCopy(st,x=>mixBuild(x,d));
+  Core.addInvoiceCombined=(st,d,rows)=>mixedOnCopy(st,x=>{
+    if(!['sale','purchase'].includes(d.type))return err('ثبت ترکیبی همزمان فقط برای فروش یا خرید است.');
+    const r=mixRaw.addInvoice(x,{...d,paid:0});if(!r.ok)return r;
+    const m=mixBuild(x,{type:d.type==='sale'?'receipt':'payment',personId:d.personId,date:d.date,invoiceId:r.invoice.id,rows,desc:'تسویه فاکتور '+r.invoice.no});if(!m.ok)return m;
+    return ok({invoice:r.invoice,combined:m.combined});
+  });
+  function mixRemove(st,m){
+    if(!m||m.status!=='active')return err('سند فعال پیدا نشد.');
+    if(inClosed(st,m.date))return closedErr(st);
+    for(const row of m.rows){
+      if(row.txId){const t=byId(st.tx,row.txId);if(!t||t.mix!==m.id||t.rec)return err('ردیف سند ناموجود یا تطبیق بانکی شده است.');}
+      else {const c=byId(st.cheques,row.chequeId);if(!c||c.mix!==m.id||c.hist.length!==1||c.hist.some(h=>h.rec))return err('چک مراحل بعدی دارد؛ ابتدا مراحل چک را برگردانید.');}
+    }
+    for(const row of m.rows){const r=row.txId?mixRaw.deleteTx(st,row.txId):mixRaw.deleteCheque(st,row.chequeId);if(!r.ok)return r;}
+    return ok();
+  }
+  Core.editCombined=(st,id,d)=>mixedOnCopy(st,x=>{
+    const m=mixOf(x,id),r=mixRemove(x,m);if(!r.ok)return r;
+    if(m.invoiceId&&(d.personId!==m.personId||d.type!==m.type))return err('شخص و جهت سند وابسته به فاکتور قابل تغییر نیست.');
+    const old=copyMixed(m);delete old.history;m.history=[...(m.history||[]),{action:'edit',at:new Date().toISOString(),previous:old}];
+    return mixBuild(x,{...d,invoiceId:m.invoiceId},m);
+  });
+  Core.voidCombined=(st,id)=>mixedOnCopy(st,x=>{
+    const m=mixOf(x,id),r=mixRemove(x,m);if(!r.ok)return r;m.status='void';m.voidAt=new Date().toISOString();return ok({combined:m});
+  });
+  Core.combinedForTx=(st,t)=>t?.mix|| (t?.chq?byId(st.cheques,t.chq)?.mix:null)||null;
+  for(const [key,list] of [['editTx','tx'],['deleteTx','tx'],['editCheque','cheques'],['deleteCheque','cheques']]){
+    Core[key]=(st,id,...args)=>byId(st[list],id)?.mix?mixFail():mixRaw[key](st,id,...args);
+  }
+  Core.editInvoice=(st,id,d)=>{
+    const m=(st.combined||[]).find(x=>x.status==='active'&&x.invoiceId===id);
+    if(m&&d.personId!==m.personId)return err('فاکتور سند ترکیبی دارد؛ ابتدا سند ترکیبی را ابطال کنید.');
+    return mixRaw.editInvoice(st,id,d);
+  };
+  Core.deleteInvoice=(st,id)=>(st.combined||[]).some(x=>x.status==='active'&&x.invoiceId===id)?err('ابتدا اسناد ترکیبی این فاکتور را ابطال کنید.'):mixRaw.deleteInvoice(st,id);
+  Core.docsOf=(st,ref)=>{
+    const m=ref.tx?Core.combinedForTx(st,byId(st.tx,ref.tx)):ref.chq?byId(st.cheques,ref.chq)?.mix:null;
+    if(!m)return mixRaw.docsOf(st,ref);
+    const first=mixRaw.docsOf(st,{mix:m});if(!ref.chq)return first;
+    const later=mixRaw.docsOf(st,ref),out=first.concat(later);out.assigned=(first.assigned||0)+(later.assigned||0);return out;
+  };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = Core; else root.Core = Core;
 })(typeof window !== 'undefined' ? window : globalThis);
