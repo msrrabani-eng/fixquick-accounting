@@ -29,3 +29,10 @@ const pages=fs.readFileSync('www/pages.js','utf8'),ui=fs.readFileSync('www/mixed
 assert.ok(pages.includes('Core.addInvoiceCombined'));assert.ok(pages.includes('mixedChoose'));assert.ok(pages.includes('mixedInvPay'));assert.ok(pages.includes('pageAccountSummary'));assert.ok(!pages.slice(pages.indexOf('function pageHome'),pages.indexOf('function pageAccountSummary')).includes('card hsum'));
 assert.ok(pages.includes('https://wa.me/989999917199'));assert.ok(ui.includes('mixedReceipt'));assert.ok(search.includes('visualViewport'));assert.ok(search.includes('sheet-wrap'));assert.ok(sw.includes('mixed-ui.js')&&sw.includes('search-viewport.js'));
 console.log('v029 mixed settlement: receipts, payments, invoice rollback, duplicates, journal, cheque lifecycle, editing, void, backup and UI wiring passed');
+
+const home=pages.slice(pages.indexOf('function pageHome'),pages.indexOf('function pageAccountSummary'));
+const shortcuts=home.slice(home.indexOf('const sc ='));
+assert.ok(shortcuts.includes("'mixedChoose'"));assert.ok(shortcuts.includes('عملیات بیشتر'));
+assert.ok(pages.includes('getExtra: () => ({rows:'));assert.ok(pages.includes('mixed:mixedRowsOf(f)'));
+const css=fs.readFileSync('www/ui2.css','utf8');assert.ok(css.includes('#main.fq-search-active>.stats'));
+assert.ok(search.includes('wasReduced&&!reduced'));assert.ok(search.includes('input[inputmode=search]'));
