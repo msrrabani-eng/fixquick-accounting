@@ -65,14 +65,19 @@ function parseDebt(text){
  if(!/اقساط|قسط|پرداخت|بدهی|بدهکار/.test(s)||!/سود|درصد/.test(s)||!/ماه/.test(s))return null;
  const delayed=/بدون پرداخت|پرداختی نداشته|پرداخت نداشته|پرداخت نکرد|پول نداده|معوق|تا الان|تا حالا|تا امروز|مدت تاخیر|مدت تأخیر/.test(s);
  const recurring=/ماهانه|ماهی|هر ماه|قسط/.test(s);
- if(!delayed||!recurring)return null;
- if(as.length!==2||rs.length!==2||ms.length!==1)return {error:'برای محاسبه دو مرحله‌ای، اصل بدهی، مدت بدون پرداخت، نرخ آن دوره، مبلغ قسط ماهانه و نرخ پس از شروع پرداخت را مشخص کنید.'};
+ if(delayed&&/پرداخت (?:کرده|کردم|کرد|شده)|دریافت (?:کرده|کردم)|تسویه جزئی/.test(s)&&!/پرداخت نکرد|پرداختی نداشته/.test(s))return {error:'پرداخت قبلی را با مبلغ و زمان مشخص کنید؛ این محاسبه فقط دوره بدون پرداخت و سپس اقساط ثابت را پوشش می‌دهد.'};
+ if(!recurring||(!delayed&&(!/روی مانده|به مانده|مانده نزولی|تا تسویه|چند قسط|چند ماه|چند وقت/.test(s)||ms.length!==0||rs.length!==1)))return null;
+ if(as.length!==2||rs.length!==(delayed?2:1)||ms.length!==(delayed?1:0))return {error:'برای محاسبه مانده نزولی، مبلغ اصل، مبلغ قسط، نرخ ماهانه و در صورت تأخیر، مدت و نرخ دوره بدون پرداخت را دقیق مشخص کنید.'};
  if(!unit&&as.some(a=>!unitOf(a.raw)))return {error:'واحد مبلغ‌ها (تومان یا ریال) را مشخص کنید.'};
- const principal=amountOf(as[0].raw,unit||C.unit),payment=amountOf(as[1].raw,unit||C.unit);
- const delay=ms[0].n,delayBp=rs[0].bp,payBp=rs[1].bp;
+ const paymentCue=/ماهیانه|ماهانه|هر ماه|ماهی|قسط معمول|مبلغ قسط|قسط/;
+ const candidates=as.filter(a=>paymentCue.test(s.slice(Math.max(0,a.index-25),a.index))||/^(?:\s+(?:در هر ماه|هر ماه|ماهانه|ماهیانه|قسط))/.test(s.slice(a.end)));
+ if(candidates.length!==1)return {error:'کدام مبلغ اصل بدهی و کدام مبلغ قسط ماهانه است؟ مبلغ قسط را با عنوان «ماهانه» مشخص کنید.'};
+ const pay=candidates[0],base=as.find(x=>x!==pay);
+ const principal=amountOf(base.raw,unit||C.unit),payment=amountOf(pay.raw,unit||C.unit);
+ const delay=delayed?ms[0].n:0,delayBp=delayed?rs[0].bp:0,payBp=rs[delayed?1:0].bp;
  // Only assign rates when clauses establish which rate applies to each phase.
- const before=s.slice(Math.max(0,rs[0].index-100),rs[0].end+35),after=s.slice(Math.max(0,rs[1].index-100),rs[1].end+35);
- if(!/بدهکار|پرداختی نداشته|پرداخت نداشته|بدون پرداخت|تاخیر|تأخیر|معوق|اول/.test(before)||!/پرداخت|قسط|از زمانی|بعد|شروع/.test(after))return {error:'مشخص کنید کدام نرخ مربوط به دوره بدون پرداخت و کدام مربوط به دوره اقساط است.'};
+ const before=s.slice(Math.max(0,rs[0].index-100),rs[0].end+35),after=delayed?s.slice(Math.max(0,rs[1].index-100),rs[1].end+35):'';
+ if(delayed&&(!/بدهکار|پرداختی نداشته|پرداخت نداشته|بدون پرداخت|تاخیر|تأخیر|معوق|اول/.test(before)||!/پرداخت|قسط|از زمانی|بعد|شروع/.test(after)))return {error:'مشخص کنید کدام نرخ مربوط به دوره بدون پرداخت و کدام مربوط به دوره اقساط است.'};
  if(!Number.isSafeInteger(principal)||!Number.isSafeInteger(payment)||delay===null||delayBp===null||payBp===null)return {error:'مبالغ، مدت یا درصد معتبر نیست؛ دوباره با واحد دقیق وارد کنید.'};
  return {principal,payment,delay,delayBp,payBp,timing:/اول ماه|ابتدای ماه|اولین قسط امروز|اولین پرداخت امروز|قسط اول همین الان|قسط اول الان/.test(s)?'start':'end',delayMethod:/سود ساده|روی اصل ثابت/.test(s)?'simple':'compound'};
 }
@@ -98,14 +103,29 @@ function tryMath(raw,ctx={},h){
  const n=normalize(raw,protectedNames),s=n.text;
  if(ctx.mathDebt&&/^(لغو|پایان محاسبه|لغو محاسبه|محاسبه جدید)$/.test(s))return result('محاسبه فرضی پایان یافت.');
  if(ctx.mathDebt&&/^(جدول|جدول اقساط|جزییات|جزئیات|محاسبات|دوباره محاسبه کن)$/.test(s))return renderDebt(ctx.mathDebt);
+ if(ctx.mathDebt&&Number.isInteger(ctx.pendingRate)&&/^(?:دوره اول|دوره دوم|دوره اقساط|اقساط|دوره تاخیر|تاخیر|دوره بدون پرداخت|بدون پرداخت|بعد از شروع پرداخت)$/.test(s)){
+ const d={...ctx.mathDebt};if(/اول|تاخیر|بدون پرداخت/.test(s))d.delayBp=ctx.pendingRate;else d.payBp=ctx.pendingRate;return renderDebt(d,n.fixes);
+ }
  const d=parseDebt(s);
  if(d){if(d.error)return ask(d.error);d.inputUnit=unitOf(s)||C.unit;return renderDebt(d,n.fixes);}
- if(ctx.mathDebt&&/قسط|پرداخت ماهانه|ماهیانه|ماهانه|درصد|سود|تاخیر|تأخیر|اول ماه|ابتدای ماه|پایان ماه|اخر ماه|بدهی اولیه/.test(s)&&!/امروز چقدر|فروش|خرید|گزارش|موجودی|مانده حساب/.test(s)){
-  const a=amend(s,ctx.mathDebt);if(a?.ambiguous)return ask('این نرخ مربوط به دوره تأخیر است یا دوره اقساط؟',ctx);if(a)return renderDebt(a,n.fixes);
+ if(ctx.mathDebt&&/قسط|پرداخت ماهانه|ماهیانه|ماهانه|درصد|سود|تاخیر|تأخیر|اول ماه|ابتدای ماه|پایان ماه|اخر ماه|بدهی اولیه/.test(s)&&!/امروز چقدر|فروش|خرید|گزارش|موجودی|مانده حساب/.test(s)&&!(amounts(s).length===1&&rates(s).length===1&&!/قسط|تاخیر|تأخیر|دوره/.test(s))){
+  const a=amend(s,ctx.mathDebt);if(a?.ambiguous)return ask('این نرخ مربوط به دوره تأخیر است یا دوره اقساط؟',{...ctx,pendingRate:rates(s)[0]?.bp});if(a)return renderDebt(a,n.fixes);
  }
  let expr=s.replace(/^(?:حساب کن|محاسبه کن|نتیجه|حاصل|چقدر میشه|چقدر می شود)\s*:?\s*/,'').replace(/[؟?]$/,'').replace(/\s*(?:چقدر می شود|چقدر میشه|چند می شود|چقدر|مساوی است)\s*$/,'').replace(/=$/,'').replace(/به علاوه|بعلاوه|جمع با|به اضافه/g,'+').replace(/منهای|منها/g,'-').replace(/ضرب در/g,'*').replace(/تقسیم بر/g,'/').replace(/به توان/g,'^');
  if(/^[\d\s.+\-*/^()%٪×÷xX−–]+$/.test(expr)&&/[+\-*/^%٪×÷xX−–]/.test(expr)){try{const a=expression(expr);return result('نتیجه: '+display(a),{},['عبارت: '+C.toFa(expr),a[1]===1n?'محاسبه صحیح و دقیق.':'مقدار دقیق: '+C.toFa(a[0].toString())+' / '+C.toFa(a[1].toString())],{kind:'arithmetic',exact:[String(a[0]),String(a[1])]});}catch(e){return ask(e.message);}}
  const as=amounts(s),rs=rates(s),u=unitOf(s);
+ if(as.length===2&&!rs.length&&/چند درصد|درصد تغییر|درصد رشد|درصد کاهش|درصد سود|حاشیه سود|درصد زیان/.test(s)&&!/ماه|قسط|دریافت|پرداخت ماهانه|مانده حساب|امروز|دیروز/.test(s)){
+  if(!u&&as.some(a=>!unitOf(a.raw)))return ask('واحد مبالغ را مشخص کنید.');
+  const a=amountOf(as[0].raw,u||C.unit),b=amountOf(as[1].raw,u||C.unit);
+  if(!Number.isSafeInteger(a)||!Number.isSafeInteger(b)||a<=0)return ask('مبلغ مبنا باید مثبت و معتبر باشد.');
+  let kind='درصد تغییر',base=a;
+  if(/خرید|بهای تمام شده|قیمت تمام شده|قیمت اولیه/.test(s)&&/فروش|قیمت نهایی/.test(s)){
+   if(!/خرید|بهای تمام شده|قیمت تمام شده|قیمت اولیه/.test(s.slice(0,as[0].index)))return ask('ابتدا قیمت خرید و سپس قیمت فروش را با عنوان مشخص وارد کنید.');
+   kind=/حاشیه سود/.test(s)?'حاشیه سود فروش':'بازده روی بهای خرید';if(kind==='حاشیه سود فروش')base=b;
+  }else if(!/از .* به |ابتدا|قبلا|مبنا|قیمت اولیه/.test(s))return ask('کدام مبلغ مبنا و کدام مبلغ نهایی است؟ مثال: از ۱۰۰ میلیون تومان به ۱۲۰ میلیون تومان.');
+  if(base<=0)return ask('مبنای درصد باید مثبت باشد.');
+  const frac=rational(BigInt(b-a)*100n,BigInt(base));return result(kind+': '+display(frac)+'٪',{},['مبلغ اولیه: '+money(a),'مبلغ نهایی: '+money(b),'تفاوت مبلغ: '+money(b-a),'مبنای درصد: '+money(base)],{kind:'percent-change',exact:[String(frac[0]),String(frac[1])],value:b-a});
+ }
  if(as.length===1&&rs.length===1&&/چقدر|محاسبه|چند|حاصل|اضافه|کم کن/.test(s)&&!/ماه|قسط|از حساب|موجودی|فروش امروز|خرید امروز/.test(s)){
   const a=amountOf(as[0].raw,u||C.unit),bp=rs[0].bp;if(!Number.isSafeInteger(a)||bp===null)return ask('مبلغ یا درصد روشن نیست.');
   const part=round(BigInt(a)*BigInt(bp),B);let total=part,kind='درصد از مبلغ';
