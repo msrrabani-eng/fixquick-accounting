@@ -11,15 +11,20 @@ function smartHandlers(valid){
  const snapshot=JSON.parse(JSON.stringify(S)),opts=()=>({today:today(),allow:smartPerms()});
  return {valid,permissions:smartPerms,today,state:()=>snapshot,aliases:smartAliases,saveAlias:a=>valid()&&smartSaveAlias(a),read:x=>Core.smartAssistant.structuredRead(snapshot,x,opts()),stock:()=>{const a=smartPerms();if(!a.warehouse||!a.reports||!a.cost)throw Error('مجوز انبار فعال نیست.');return Core.stockInsights(snapshot,today());},finance:(x,c)=>Core.financeScenario.ask(x,c,opts()),weighted:(x,c)=>Core.chequeAssistant.weightedAsk(x,c,opts())};
 }
+function smartMathTable(rows){
+ if(!Array.isArray(rows)||!rows.length)return '';
+ const cell=x=>esc(fmt(x));
+ return '<details class="fq-math-schedule" open><summary>جدول کامل محاسبات ('+fa(rows.length)+' ردیف)</summary><div class="fq-math-scroll"><table dir="rtl"><thead><tr><th>مرحله</th><th>مانده اول</th><th>سود</th><th>پرداخت</th><th>مانده آخر</th></tr></thead><tbody>'+rows.map(r=>'<tr><th>'+ (r.phase==='delay'?'تأخیر ':'قسط ')+fa(r.month)+'</th><td>'+cell(r.opening)+'</td><td>'+cell(r.interest)+'</td><td>'+cell(r.payment)+'</td><td>'+cell(r.closing)+'</td></tr>').join('')+'</tbody></table></div><small class="hint">واحد مبالغ: '+esc(UNIT())+'</small></details>';
+}
 function pageSmartAssistant(){
  smartResetForUser();
- const examples=['فروش این ماه نسبت به ماه قبل','چرا فروش این ماه کم شده؟','بیشترین سود کالا این ماه','چک های ۷ روز آینده','اولویت وصول مطالبات','پیش بینی نقدینگی تا آخر ماه','سرمایه راکد','پیشنهاد سفارش خرید','عملکرد سه ماه اخیر','حسابرسی','رأس‌گیری چک‌ها','محاسبه سود معامله','اقساط ۱۰۰ میلیون تومان، پیش پرداخت ۵۰ درصد، ۴ ماه، ۷ درصد ماهانه ساده','ارزش انبار'];
- const history=smartTalk.length?smartTalk.map(m=>'<div class="fq-msg '+(m.role==='user'?'fq-user':'fq-bot')+'"><div>'+esc(m.text)+'</div>'+(m.source?'<small class="hint">'+esc(m.source)+'</small>':'')+(m.details?.length?'<ul>'+m.details.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+(m.actions?.length?'<div class="chips wrap">'+m.actions.map(x=>'<button type="button" class="chip" data-act="go" data-h="'+esc(x.route)+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+'</div>').join(''):'<div class="hint center">سؤال خود را درباره اطلاعات ثبت‌شده بپرسید. پاسخ‌ها از موتور حسابداری محاسبه می‌شوند.</div>';
+ const examples=['(۲۵۰ + ۷۵) × ۳','۷ درصد از ۴۰۰ میلیون تومان چقدر است؟','۴۰۰ میلیون تومان بدهی، ۳ ماه بدون پرداخت، سود دوره تأخیر ۷ درصد روی مانده و پس از شروع پرداخت ۵ درصد، ماهانه ۵۰ میلیون تومان، چند قسط؟','فروش این ماه نسبت به ماه قبل','چرا فروش این ماه کم شده؟','بیشترین سود کالا این ماه','چک های ۷ روز آینده','اولویت وصول مطالبات','پیش بینی نقدینگی تا آخر ماه','سرمایه راکد','پیشنهاد سفارش خرید','عملکرد سه ماه اخیر','حسابرسی','رأس‌گیری چک‌ها','محاسبه سود معامله','اقساط ۱۰۰ میلیون تومان، پیش پرداخت ۵۰ درصد، ۴ ماه، ۷ درصد ماهانه ساده','ارزش انبار'];
+ const history=smartTalk.length?smartTalk.map(m=>'<div class="fq-msg '+(m.role==='user'?'fq-user':'fq-bot')+'"><div>'+esc(m.text)+'</div>'+(m.source?'<small class="hint">'+esc(m.source)+'</small>':'')+(m.details?.length?'<ul>'+m.details.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+smartMathTable(m.rows)+(m.actions?.length?'<div class="chips wrap">'+m.actions.map(x=>'<button type="button" class="chip" data-act="go" data-h="'+esc(x.route)+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+'</div>').join(''):'<div class="hint center">سؤال خود را درباره اطلاعات ثبت‌شده بپرسید. پاسخ‌ها از موتور حسابداری محاسبه می‌شوند.</div>';
  const html='<section class="ui20-chat"><div class="ui20-scroll"><div class="ui2-chat-head"><div class="ch">'+ico('chat')+'دستیار حسابداری</div><button type="button" class="lnk" id="fq-chat-reset">'+ico('plus')+'گفت‌وگوی جدید</button></div>'+
  '<details class="ui2-chat-intro"><summary>راهنمای دستیار · آفلاین</summary><p class="hint">پرسش آزاد درباره فروش، سود، کالا، اشخاص و سررسیدها. هیچ ثبت مالی تغییر نمی‌کند. برای یادگیری اصطلاح، «نام مستعار کالا ۱۷ مکس = نام کامل کالا» را وارد و سپس تأیید کنید.</p></details>'+
  '<div id="fq-chat-history" class="fq-chat-history" aria-live="polite">'+history+'</div>'+
  (smartTalk.length?'':'<div class="card fq-advisor-overview" id="fq-advisor-overview"><div class="ch">وضعیت هوشمند کسب‌وکار</div><div id="fq-advisor-alerts" class="hint" aria-live="polite">در حال بررسی ثبت‌های محلی…</div><button type="button" class="btn ghost" data-act="fqChatExample" data-q="گزارش مدیریت">گزارش کامل مدیریت</button></div><details class="ui20-examples"><summary>نمونه سؤال‌ها</summary><div class="chips wrap ui2-chat-examples">'+examples.map(x=>'<button type="button" class="chip" data-act="fqChatExample" data-q="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div></details>')+'</div>'+
- '<form id="fq-chat-form" class="card ui2-chat-compose"><textarea id="fq-chat-input" class="inp" rows="1" maxlength="1800" aria-label="سؤال جدید" placeholder="سؤال خود را بنویسید…" required></textarea><button class="btn blue" type="submit" aria-label="ارسال سؤال"'+(smartBusy?' disabled':'')+'>'+ico('send')+'</button></form></section>';
+ '<form id="fq-chat-form" class="card ui2-chat-compose"><textarea id="fq-chat-input" class="inp" rows="1" maxlength="4000" aria-label="سؤال جدید" placeholder="مسئله مالی، ریاضی یا سؤال حسابداری خود را بنویسید…" required></textarea><button class="btn blue" type="submit" aria-label="ارسال سؤال"'+(smartBusy?' disabled':'')+'>'+ico('send')+'</button></form></section>';
  return {title:'دستیار حسابداری',html,back:'#/home',mount:()=>{
   $('#fq-chat-form').onsubmit=e=>{e.preventDefault();smartAskQuestion($('#fq-chat-input').value);};
   $('#fq-chat-reset').onclick=()=>{smartJob++;smartBusy=false;smartTalk=[];smartContext={};render();};
@@ -37,7 +42,7 @@ async function smartAskQuestion(text){
  catch(e){out={text:'گزارش کامل نشد؛ هیچ مبلغ حدسی تولید نشد.',ctx:context,details:[String(e?.message||e)],actions:[],source:'خطای گزارش'};}
  finally{if(job===smartJob)smartBusy=false;}
  if(!valid())return;
- smartContext=out.ctx||{};smartTalk.push({role:'assistant',text:out.text,details:out.details,actions:out.actions,source:out.source||'دستیار حسابداری'});smartTalk=smartTalk.slice(-16);render();
+ smartContext=out.ctx||{};smartTalk.push({role:'assistant',text:out.text,details:out.details,actions:out.actions,source:out.source||'دستیار حسابداری',rows:out.rows});smartTalk=smartTalk.slice(-16);render();
 }
 if(typeof window!=='undefined')window.addEventListener('hashchange',()=>{if(location.hash.split('?')[0]!=='#/assistant'){smartJob++;smartBusy=false;smartTalk=[];smartContext={};}});
 

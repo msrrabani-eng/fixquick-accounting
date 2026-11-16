@@ -4,6 +4,7 @@ const C=typeof module!=='undefined'&&module.exports?require('./core.js'):root.Co
 const A=typeof module!=='undefined'&&module.exports?require('./assistant-brain.js'):C.smartAssistant;
 const B=typeof module!=='undefined'&&module.exports?require('./report-assistant.js'):root.FQReports;
 const F=typeof module!=='undefined'&&module.exports?require('./finance-scenario.js'):C.financeScenario;
+const M=typeof module!=='undefined'&&module.exports?require('./math-assistant.js'):root.FQMath;
 const norm=s=>C.norm(String(s||'').normalize('NFKC').replace(/[\u0640\u064b-\u065f\u0670]/g,'')).replace(/[؟?!،؛:«»]/g,' ').replace(/\s+/g,' ').trim();
 const money=n=>C.fmt(Math.round(n))+' '+C.unitName(),pct=n=>C.toFa((Math.round(n*10)/10).toString())+'٪';
 const whole=(q,t)=>(' '+q+' ').includes(' '+t+' ');
@@ -148,9 +149,15 @@ function analytics(st,q,scope,today,h,ctx,aliases,forced){
 }
 async function run(q,ctx={},h){
  if(!h.valid())throw Error('دسترسی تغییر کرده است.');
- const raw=String(q||'').trim(),n=norm(raw),today=h.today();
+ let raw=String(q||'').trim(),n=norm(raw);const today=h.today();
  // Original calculator conversations retain priority, and all new functions are optional to older callers.
  if(ctx.finance||ctx.weighted)return B.runSmart(raw,ctx,h);
+ if(M&&!ctx.pendingAlias&&!ctx.pending&&!/^نام مستعار/.test(n)){
+  const math=M.tryMath(raw,ctx,h);if(!h.valid())throw Error('دسترسی تغییر کرده است.');
+  if(math)return math;
+  const st=h.state?.(),names=[...(st?.people||[]),...(st?.products||[])].map(x=>x.name||'');
+  const clean=M.normalize(raw,names);if(clean.fixes.length){raw=clean.text;n=norm(raw);}
+ }
  if(!h.state)return B.runSmart(raw,ctx,h);
  const st=h.state(),aliases=h.aliases?.()||[],can=(...k)=>k.every(x=>h.permissions()[x]===true);
  if(/(?:^| )(حذف|پاک کن|ثبت کن|ویرایش کن|اضافه کن|انتقال بده|تغییر بده)(?: |$)/.test(n))return clarify('دستیار فقط گزارش و محاسبه ارائه می‌دهد؛ برای ثبت یا تغییر از فرم اصلی استفاده کنید.');
