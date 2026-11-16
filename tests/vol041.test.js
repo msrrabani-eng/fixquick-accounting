@@ -10,4 +10,5 @@ assert.match(py,/b11146/);assert.match(py,/POSIX_MADV_WILLNEED MADV_WILLNEED/);
 assert.match(ui,/دانلود مدل پیشنهادی/);assert.match(css,/\.ui20-chat>\.ui20-scroll\{grid-row:2;.*contain:paint/);
 assert.match(css,/\.ui20-chat>\.ui2-chat-compose\{grid-row:3/);assert.match(ui,/requestAnimationFrame\(\(\)=>\{if\(b\.isConnected&&last\.isConnected\)/);
 assert.doesNotMatch(read('.github/workflows/build-apk.yml'),/install_storage_cleanup\.py/);
+assert.match(read('local-math/engine.cpp'),/mp\.load_mode=LLAMA_LOAD_MODE_MMAP/);assert.doesNotMatch(read('local-math/engine.cpp'),/mp\.(use_mmap|use_mlock)/);
 console.log('v041: new model manifest, separate storage, preservation and isolated chat layout checks passed; on-device inference not tested');

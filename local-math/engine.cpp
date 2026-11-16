@@ -33,7 +33,7 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_ir_fixquick_accounting_FqMathServic
     try {
         Limits limits{Clock::now()+std::chrono::seconds(175)};
         std::call_once(backend,[]{llama_backend_init();});
-        auto mp=llama_model_default_params();mp.n_gpu_layers=0;mp.use_mmap=true;mp.use_mlock=false;mp.progress_callback=progress;mp.progress_callback_user_data=&limits;
+        auto mp=llama_model_default_params();mp.n_gpu_layers=0;mp.load_mode=LLAMA_LOAD_MODE_MMAP;mp.progress_callback=progress;mp.progress_callback_user_data=&limits;
         auto file=bytes(e,path),input=bytes(e,prompt);
         std::unique_ptr<llama_model,decltype(&llama_model_free)> model(llama_model_load_from_file(file.c_str(),mp),llama_model_free);
         if(!model||stop(&limits))throw std::runtime_error("Model load failed or cancelled; check RAM");
