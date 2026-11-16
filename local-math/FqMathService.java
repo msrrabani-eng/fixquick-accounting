@@ -33,8 +33,8 @@ public final class FqMathService extends Service {
         worker.execute(()->{
             long start=SystemClock.elapsedRealtime();String answer=null,error=null;
             try{
-                java.io.File dir=getExternalFilesDir("local-math-v035");
-                java.io.File model=new java.io.File(dir,"Qwen3-4B-Q4_K_M.gguf");
+                java.io.File dir=getExternalFilesDir("local-math-v041");
+                java.io.File model=new java.io.File(dir,"Qwen3.5-4B-Q4_K_M.gguf");
                 if(dir==null||!model.isFile())throw new IllegalStateException("Verified model file missing");
                 byte[] data=nativeRun(model.getAbsolutePath().getBytes(StandardCharsets.UTF_8),prompt.getBytes(StandardCharsets.UTF_8),limit);
                 answer=new String(data,StandardCharsets.UTF_8);

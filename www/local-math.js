@@ -19,7 +19,7 @@ async function solve(question,history,date,ctx={}){
  if(running)throw Error('یک درخواست مدل در حال اجراست؛ آن را متوقف کنید.');
  const immediate=H.local(question,ctx,date);if(immediate)return immediate;
  const p=api();if(!p)throw Error('موتور بومی در دسترس نیست.');
- const framed='<|im_start|>user\n'+escapeMarkers(H.planPrompt(question,date))+' /no_think<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n';
+ const framed='<|im_start|>user\n'+escapeMarkers(H.planPrompt(question,date))+'<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n';
  const r=await exclusive(()=>p.solve({prompt:framed}));
  const out=H.evaluate(question,String(r.text||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim());
  out.details.push('زمان تحلیل مدل: '+(Number(r.ms||0)/1000).toFixed(1)+' ثانیه');

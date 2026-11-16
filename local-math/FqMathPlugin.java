@@ -18,10 +18,12 @@ import java.util.concurrent.Executors;
 /** The optional model is not bundled. Only the exact official GGUF is accepted. */
 @CapacitorPlugin(name="FqLocalMath")
 public final class FqMathPlugin extends Plugin {
-    private static final String NAME="Qwen3-4B-Q4_K_M.gguf", DIR="local-math-v035";
-    private static final String URL="https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf";
-    private static final String SHA="7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5";
-    private static final long MIN=2400000000L,MAX=2600000000L;
+    private static final String NAME="Qwen3.5-4B-Q4_K_M.gguf", DIR="local-math-v041";
+    private static final String URL="https://huggingface.co/twoody/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf";
+    private static final String SHA="b7508d8b4a652bc020a439aafdd4ce1527d49774865ce3334a43b16dbeaa90ca";
+    private static final long MIN=2783446880L,MAX=2783446880L;
+    // Legacy model and preferences are deliberately not modified by this update.
+    private static final String LEGACY_DIR="local-math-v035", LEGACY_NAME="Qwen3-4B-Q4_K_M.gguf";
     private static final ExecutorService io=Executors.newSingleThreadExecutor();
     private static volatile boolean checking=false;
     private static volatile String failure="";
@@ -36,14 +38,14 @@ public final class FqMathPlugin extends Plugin {
     private Messenger remote;
     private Runnable alarm;
     private boolean bound=false,probe=false;
-    private SharedPreferences prefs(){return getContext().getSharedPreferences("fq_local_math_v035",Context.MODE_PRIVATE);}
+    private SharedPreferences prefs(){return getContext().getSharedPreferences("fq_local_math_v041",Context.MODE_PRIVATE);}
     private File dir(){File d=getContext().getExternalFilesDir(DIR);if(d==null)throw new IllegalStateException("Storage unavailable");if(!d.isDirectory()&&!d.mkdirs())throw new IllegalStateException("Cannot create model folder");return d;}
     private File model(){return new File(dir(),NAME);}
     private File partial(){return new File(dir(),"download.gguf.part");}
     private DownloadManager dm(){return (DownloadManager)getContext().getSystemService(Context.DOWNLOAD_SERVICE);}
     private boolean supported(){for(String abi:Build.SUPPORTED_ABIS)if(abi.equals("arm64-v8a"))return true;return false;}
     private boolean verified(){File f=model();return f.isFile()&&f.length()>=MIN&&f.length()<=MAX&&prefs().getLong("length",-1)==f.length()&&prefs().getLong("modified",-1)==f.lastModified()&&SHA.equals(prefs().getString("sha",""));}
-    private void checkSpace() throws IOException {if(dir().getUsableSpace()<MAX+100000000L)throw new IOException("At least 2.7 GB free storage required");}
+    private void checkSpace() throws IOException {if(dir().getUsableSpace()<MAX+100000000L)throw new IOException("At least 2.9 GB free storage required");}
     private void hash(File f) throws Exception {
         if(f.length()<MIN||f.length()>MAX)throw new IOException("Model file size incorrect");
         MessageDigest md=MessageDigest.getInstance("SHA-256");byte[] buf=new byte[1024*1024];
@@ -64,7 +66,7 @@ public final class FqMathPlugin extends Plugin {
         }});
     }
     private JSObject state(){
-        JSObject j=new JSObject();j.put("supported",supported());j.put("ready",false);j.put("tested",false);j.put("bytes",0L);j.put("total",2500000000L);j.put("running",active!=null);j.put("stage",executionStage);j.put("elapsed",active==null?0:Math.max(0,SystemClock.elapsedRealtime()-started));j.put("loadPercent",loadPercent);j.put("generated",generated);j.put("runError",lastRunError);
+        JSObject j=new JSObject();j.put("supported",supported());j.put("ready",false);j.put("tested",false);j.put("bytes",0L);j.put("total",MAX);File prior=getContext().getExternalFilesDir(LEGACY_DIR);j.put("legacyPresent",prior!=null&&new File(prior,LEGACY_NAME).isFile());j.put("modelName","Qwen3.5 4B");j.put("running",active!=null);j.put("stage",executionStage);j.put("elapsed",active==null?0:Math.max(0,SystemClock.elapsedRealtime()-started));j.put("loadPercent",loadPercent);j.put("generated",generated);j.put("runError",lastRunError);
         if(!supported()){j.put("phase","unsupported");return j;}
         if(checking){j.put("phase","checking");return j;}
         if(verified()){j.put("phase","ready");j.put("ready",true);j.put("tested",prefs().getBoolean("tested",false));j.put("bytes",model().length());j.put("total",model().length());return j;}
@@ -89,7 +91,7 @@ public final class FqMathPlugin extends Plugin {
     @PluginMethod public synchronized void download(PluginCall call){
         try{JSObject s=state();String phase=s.getString("phase");if(!supported())throw new IOException("64-bit ARM device required");if("ready".equals(phase)||"preserved".equals(phase)||"checking".equals(phase)||"downloading".equals(phase)||"paused".equals(phase)){call.resolve(s);return;}
             checkSpace();if(partial().exists()&&!partial().delete())throw new IOException("Previous partial file cannot be removed");
-            DownloadManager.Request r=new DownloadManager.Request(Uri.parse(URL));r.setTitle("Fix Quick — Qwen3 4B");r.setDescription("Optional offline math model");r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);r.setAllowedOverRoaming(false);r.setDestinationInExternalFilesDir(getContext(),DIR,"download.gguf.part");
+            DownloadManager.Request r=new DownloadManager.Request(Uri.parse(URL));r.setTitle("Fix Quick — Qwen3.5 4B");r.setDescription("Optional offline math model");r.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE);r.setAllowedOverRoaming(false);r.setDestinationInExternalFilesDir(getContext(),DIR,"download.gguf.part");
             long id=dm().enqueue(r);if(!prefs().edit().putLong("download",id).commit()){dm().remove(id);throw new IOException("Could not persist download");}
             failure="";call.resolve(state());
         }catch(Exception e){call.reject(String.valueOf(e.getMessage()));}
@@ -129,7 +131,7 @@ public final class FqMathPlugin extends Plugin {
             if(!supported()||!verified())throw new IOException("Download and verify model first");
             ActivityManager.MemoryInfo m=new ActivityManager.MemoryInfo();((ActivityManager)getContext().getSystemService(Context.ACTIVITY_SERVICE)).getMemoryInfo(m);
             if(m.lowMemory||m.totalMem<5000000000L||m.availMem<1300000000L)throw new IOException("Insufficient available RAM; close other apps");
-            String prompt=test?"<|im_start|>user\n17+25=? /no_think<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n":call.getString("prompt","");
+            String prompt=test?"<|im_start|>user\n17+25=?<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n":call.getString("prompt","");
             if(prompt.isEmpty()||prompt.length()>12000)throw new IOException("Invalid prompt length");
             active=call;probe=test;started=SystemClock.elapsedRealtime();executionStage="connecting";lastRunError="";loadPercent=0;generated=0;stopping=false;
             alarm=()->{if(active==call)requestStop("Inference timeout (180 s)");};main.postDelayed(alarm,180000);
@@ -140,7 +142,7 @@ public final class FqMathPlugin extends Plugin {
             }));
             conn=new ServiceConnection(){
                 @Override public void onServiceConnected(ComponentName name,IBinder binder){
-                    if(active!=call)return;remote=new Messenger(binder);if(stopping){cancelWork();return;}executionStage="loading";try{Message msg=Message.obtain(null,1);Bundle b=new Bundle();b.putString("prompt",prompt);b.putInt("max",test?24:640);msg.setData(b);msg.replyTo=reply;remote.send(msg);}catch(Exception e){finish(null,"Engine connection failed",0);}
+                    if(active!=call)return;remote=new Messenger(binder);if(stopping){cancelWork();return;}executionStage="loading";try{Message msg=Message.obtain(null,1);Bundle b=new Bundle();b.putString("prompt",prompt);b.putInt("max",test?24:256);msg.setData(b);msg.replyTo=reply;remote.send(msg);}catch(Exception e){finish(null,"Engine connection failed",0);}
                 }
                 @Override public void onServiceDisconnected(ComponentName name){if(active==call)finish(null,"Engine process stopped; possible memory pressure",0);}
                 @Override public void onBindingDied(ComponentName name){if(active==call)finish(null,"Engine process stopped",0);}

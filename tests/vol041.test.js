@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs'),read=p=>fs.readFileSync(p,'utf8');
+const j=read('local-math/FqMathPlugin.java'),s=read('local-math/FqMathService.java'),py=read('tools/install_math_engine.py'),ui=read('www/smart-ui.js'),css=read('www/ui2.css');
+assert.match(j,/NAME="Qwen3\.5-4B-Q4_K_M\.gguf", DIR="local-math-v041"/);
+assert.match(j,/LEGACY_DIR="local-math-v035"/);assert.match(j,/legacyPresent/);assert.match(j,/fq_local_math_v041/);
+assert.match(j,/2783446880L/);assert.match(j,/b7508d8b4a652bc020a439aafdd4ce1527d49774865ce3334a43b16dbeaa90ca/);
+assert.doesNotMatch(j,/target\.delete\(|model\(\)\.delete\(|prior\.delete\(/);
+assert.match(s,/getExternalFilesDir\("local-math-v041"\)/);assert.match(s,/Qwen3\.5-4B-Q4_K_M\.gguf/);
+assert.match(py,/b11146/);assert.match(py,/POSIX_MADV_WILLNEED MADV_WILLNEED/);
+assert.match(ui,/دانلود مدل پیشنهادی/);assert.match(css,/\.ui20-chat>\.ui20-scroll\{grid-row:2;.*contain:paint/);
+assert.match(css,/\.ui20-chat>\.ui2-chat-compose\{grid-row:3/);assert.match(ui,/requestAnimationFrame\(\(\)=>\{if\(b\.isConnected&&last\.isConnected\)/);
+assert.doesNotMatch(read('.github/workflows/build-apk.yml'),/install_storage_cleanup\.py/);
+console.log('v041: new model manifest, separate storage, preservation and isolated chat layout checks passed; on-device inference not tested');

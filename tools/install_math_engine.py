@@ -24,18 +24,18 @@ manifest.write_text(s)
 cpp=app/'src/main/cpp'
 cpp.mkdir(parents=True,exist_ok=True)
 for name in ['CMakeLists.txt','engine.cpp']: shutil.copy2(source/name,cpp/name)
-subprocess.run(['git','clone','--depth','1','--branch','b6500','https://github.com/ggml-org/llama.cpp.git',str(cpp/'llama')],check=True)
-# Android API 22 headers lack POSIX_MADV_*; use the equivalent Linux
-# madvise calls on Android. Avoid MAP_POPULATE there to keep startup memory bounded.
+subprocess.run(['git','clone','--depth','1','--branch','b11146','https://github.com/ggml-org/llama.cpp.git',str(cpp/'llama')],check=True)
+# Android API 22 has madvise but not POSIX_MADV_* in the NDK headers.
+# Restrict platform-specific substitutions to Android; do not pre-fault the whole model.
 mmap=cpp/'llama/src/llama-mmap.cpp'
 s=mmap.read_text()
-assert s.count('posix_madvise(addr,')==2
-s=s.replace('if (posix_madvise(addr, std::min(file->size(), prefetch), POSIX_MADV_WILLNEED)) {',
-    '#if defined(__ANDROID__)\n            if (madvise(addr, std::min(file->size(), prefetch), MADV_WILLNEED)) {\n#else\n            if (posix_madvise(addr, std::min(file->size(), prefetch), POSIX_MADV_WILLNEED)) {\n#endif',1)
-s=s.replace('if (posix_madvise(addr, file->size(), POSIX_MADV_RANDOM)) {',
-    '#if defined(__ANDROID__)\n            if (madvise(addr, file->size(), MADV_RANDOM)) {\n#else\n            if (posix_madvise(addr, file->size(), POSIX_MADV_RANDOM)) {\n#endif',1)
-assert 'if (prefetch) { flags |= MAP_POPULATE; }' in s
-s=s.replace('if (prefetch) { flags |= MAP_POPULATE; }','#if !defined(__ANDROID__)\n        if (prefetch) { flags |= MAP_POPULATE; }\n#endif',1)
+assert 'posix_madvise((char *) addr + beg, end - beg, advice)' in s and 'posix_madvise(addr, file->size(), POSIX_MADV_RANDOM)' in s
+anchor='struct llama_mmap::impl {'
+assert anchor in s
+s=s.replace(anchor, '#if defined(__ANDROID__)\n#define posix_madvise madvise\n#define POSIX_MADV_WILLNEED MADV_WILLNEED\n#define POSIX_MADV_RANDOM MADV_RANDOM\n#endif\n'+anchor,1)
+anchor='if (prefetch && lazy_ranges.empty()) { flags |= MAP_POPULATE; }'
+assert anchor in s
+s=s.replace(anchor,'#if !defined(__ANDROID__)\n        '+anchor+'\n#endif',1)
 mmap.write_text(s)
 shutil.copy2(cpp/'llama/LICENSE',app/'src/main/assets/llama-LICENSE.txt')
 g=app/'build.gradle'

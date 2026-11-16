@@ -121,3 +121,15 @@ body.fq-chat-typing:has(#main[data-page=assistant]) .app{height:var(--fq-chat-vi
 
 /* Keep ordinary touch scrolling and native clicks in search results. */
 .fq-search-active button,.fq-search-active a[data-act],.fq-search-active [role=button]{touch-action:manipulation}
+
+/* v041: keep conversation strictly inside its own clipped grid row. */
+#main[data-page=assistant]:has(>.ui20-chat){overflow:hidden;min-height:0;min-width:0}
+.ui20-chat:not(.fq-chat-expanded){grid-template-rows:minmax(0,max-content) minmax(0,1fr) minmax(0,max-content);isolation:isolate}
+.ui20-chat>.fq-chat-top{grid-row:1;position:relative;min-height:0;max-height:36dvh;overflow:auto}
+.ui20-chat>.ui20-scroll{grid-row:2;position:relative;min-height:0;overflow-y:auto;overflow-x:hidden;contain:paint;scroll-padding-block:8px}
+.ui20-chat>.ui2-chat-compose{grid-row:3;position:relative;min-height:0}
+.ui20-chat.fq-chat-has-messages .fq-chat-top .fq-chat-quota:not([aria-live]){display:none}
+.ui20-chat.fq-chat-has-messages .fq-chat-top .ui2-chat-head{gap:4px}
+body.fq-chat-typing #main[data-page=assistant] .ui20-chat:not(.fq-chat-expanded)>.fq-chat-top{display:none}
+body.fq-chat-typing #main[data-page=assistant] .ui20-chat:not(.fq-chat-expanded){grid-template-rows:0 minmax(0,1fr) minmax(0,max-content)}
+.ui20-chat.fq-chat-expanded>.ui2-chat-compose{grid-row:3}

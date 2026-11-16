@@ -13,7 +13,7 @@ assert.ok(ui.includes('FQLocalMath.solve(q,smartTalk.slice(0,-1),Core.isoToJalal
 assert.ok(ui.includes('if(!smartDataAccess)smartMountModel()'));
 assert.ok(ui.includes('data-model="download"')&&ui.includes('data-model="importModel"'));
 const java=fs.readFileSync('local-math/FqMathPlugin.java','utf8'),worker=fs.readFileSync('local-math/FqMathService.java','utf8'),native=fs.readFileSync('local-math/engine.cpp','utf8');
-assert.match(java,/SHA-256/);assert.match(java,/fq_local_math_v035/);assert.match(java,/DownloadManager/);assert.match(java,/ACTION_OPEN_DOCUMENT/);
+assert.match(java,/SHA-256/);assert.match(java,/fq_local_math_v041/);assert.match(java,/DownloadManager/);assert.match(java,/ACTION_OPEN_DOCUMENT/);
 assert.match(worker,/nativeRun/);assert.doesNotMatch(worker,/DownloadManager|HttpURLConnection|SQLite|WebView/);
 assert.match(native,/llama_decode/);assert.match(native,/llama_model_load_from_file/);
 assert.match(fs.readFileSync('tools/install_math_engine.py','utf8'),/android:process=":fqmath"/);

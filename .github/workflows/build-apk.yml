@@ -52,6 +52,7 @@ jobs:
           node tests/vol037.test.js
           node tests/vol038.test.js
           node tests/vol040.test.js
+          node tests/vol041.test.js
           javac -encoding UTF-8 -d /tmp/fq-probe-test local-math/MathProbe.java tests/MathProbeTest.java
           java -cp /tmp/fq-probe-test ir.fixquick.accounting.MathProbeTest
 
