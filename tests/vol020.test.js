@@ -2,7 +2,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
 const pages=read('www/pages.js'),ui=read('www/smart-ui.js'),css=read('www/ui2.css');assert.equal((pages.match(/data-h="#\/assistant"/g)||[]).length,1);assert.ok(ui.includes('ui20-scroll'));assert.ok(css.includes('grid-template-rows:minmax(0,1fr) auto'));assert.ok(css.includes('.ui20-chat .ui2-chat-compose{position:static'));
-assert.match(read('www/sw.js'),/vol(?:02[0123456789]|030|031)/);assert.match(read('www/diag.js'),/APP_VER = '1\.(?:5[123456789]|60|61|62)'/);
+assert.match(read('www/sw.js'),/vol(?:02[0123456789]|030|031|032)/);assert.match(read('www/diag.js'),/APP_VER = '1\.(?:5[123456789]|60|61|62|63)'/);
 // Stock toolbar: expanding the disclosure must not squeeze the five actions into its closed width.
 const stockUi=read('www/ui2.js');
 assert.ok(stockUi.includes("bar.classList.add('ui2-stock-toolbar')"));
