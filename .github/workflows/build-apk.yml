@@ -51,6 +51,8 @@ jobs:
           node tests/vol036.test.js
           node tests/vol037.test.js
           node tests/vol038.test.js
+          javac -encoding UTF-8 -d /tmp/fq-probe-test local-math/MathProbe.java tests/MathProbeTest.java
+          java -cp /tmp/fq-probe-test ir.fixquick.accounting.MathProbeTest
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |

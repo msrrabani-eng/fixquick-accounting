@@ -159,7 +159,7 @@ public final class FqMathPlugin extends Plugin {
         if(call==null)return;
         if(err!=null||answer==null||answer.trim().isEmpty()){call.reject(err==null?"No model answer":err);return;}
         JSObject j=new JSObject();j.put("text",answer);j.put("ms",ms);
-        if(t){boolean ok=answer.trim().matches("42[.]?|۴۲[.]?");prefs().edit().putBoolean("tested",ok).commit();j.put("passed",ok);}
+        if(t){boolean ok=MathProbe.passed(answer);prefs().edit().putBoolean("tested",ok).commit();j.put("passed",ok);}
         call.resolve(j);
     }
 }

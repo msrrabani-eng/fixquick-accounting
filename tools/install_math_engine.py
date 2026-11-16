@@ -6,7 +6,7 @@ r=Path(__file__).resolve().parent.parent
 app=r/'android/app'
 source=r/'local-math'
 java=app/'src/main/java/ir/fixquick/accounting'
-for name in ['FqMathPlugin.java','FqMathService.java']:
+for name in ['FqMathPlugin.java','FqMathService.java','MathProbe.java']:
     shutil.copy2(source/name,java/name)
 activity=java/'MainActivity.java'
 s=activity.read_text()
