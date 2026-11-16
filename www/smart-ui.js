@@ -66,20 +66,23 @@ function smartEditorMount(){
 function smartMountModel(){
  const panel=$('#fq-local-model');if(!panel)return;
  const owner=smartCurrentUser(),valid=()=>panel.isConnected&&smartAccess(owner)&&!smartDataAccess;
- let busy=false,probeText='',pending='';
- const labels={ready:'فایل مدل تأیید شد',missing:'مدل نصب نشده',error:'خطای نصب یا دانلود',checking:'در حال انتقال یا بررسی SHA-256…',downloading:'در حال دانلود',paused:'دانلود موقتاً متوقف است',unsupported:'موتور روی این دستگاه در دسترس نیست'};
- const update=async()=>{if(!valid()||busy)return;
-  try{const s=await FQLocalMath.status();if(!valid()||busy)return;
+ let busy=false,probeText='',pending='',timer=0;
+ const labels={ready:'فایل مدل تأیید شد',missing:'مدل نصب نشده',error:'خطای نصب یا دانلود',preserved:'فایل موجود حفظ شده؛ بررسی لازم است',checking:'در حال انتقال یا بررسی SHA-256…',downloading:'در حال دانلود',paused:'دانلود موقتاً متوقف است',unsupported:'موتور روی این دستگاه در دسترس نیست'};
+ const stages={connecting:'اتصال به موتور',loading:'بارگذاری مدل',context:'آماده‌سازی حافظه',prompt:'تحلیل متن سؤال',generating:'تولید پاسخ',stopping:'در حال توقف امن',idle:'آماده‌سازی درخواست'};
+ const update=async()=>{clearTimeout(timer);if(!valid())return;
+  try{const s=await FQLocalMath.status();if(!valid())return;
    const percent=s.total>0?Math.min(100,Math.floor(s.bytes/s.total*100)):0;
-   const loading=['downloading','paused'].includes(s.phase);
-   const offer=['missing','error'].includes(s.phase);
+   const loading=['downloading','paused'].includes(s.phase),offer=['missing','error'].includes(s.phase);
    panel.querySelector('.fq-model-status').textContent=(labels[s.phase]||s.phase)+(loading?' — '+fa(percent)+'٪':'')+(s.ready?(s.tested?' — تست اولیه موفق':' — تست اجرا لازم است'):'');
-   panel.querySelector('.fq-model-error').textContent=pending||probeText||s.error||'';
-   for(const [name,show] of [['download',offer],['importModel',offer],['cancelDownload',loading],['test',s.ready]]){const b=panel.querySelector('[data-model="'+name+'"]');b.hidden=!show;b.disabled=smartBusy||busy;}
-   if(loading||s.phase==='checking')setTimeout(update,1100);
+   const progress=s.running?(stages[s.stage]||'در حال اجرا')+' — '+fa(Math.floor((s.elapsed||0)/1000))+' ثانیه'+(s.stage==='loading'?' · '+fa(s.loadPercent||0)+'٪':s.stage==='generating'?' · '+fa(s.generated||0)+' توکن':''):'';
+   panel.querySelector('.fq-model-error').textContent=progress||pending||probeText||s.runError||s.error||'';
+   for(const [name,show] of [['download',offer],['importModel',offer],['cancelDownload',loading],['test',s.ready&&!s.running],['stop',s.running]]){const b=panel.querySelector('[data-model="'+name+'"]');b.hidden=!show;b.disabled=name==='stop'?false:smartBusy||busy||s.running;}
   }catch(e){if(valid())panel.querySelector('.fq-model-error').textContent=String(e.message||e);}
+  if(valid())timer=setTimeout(update,1000);
  };
- panel.querySelectorAll('[data-model]').forEach(b=>b.onclick=async()=>{if(busy||smartBusy||!valid())return;const name=b.dataset.model;
+ panel.querySelectorAll('[data-model]').forEach(b=>b.onclick=async()=>{if(!valid())return;const name=b.dataset.model;
+  if(name==='stop'){b.disabled=true;try{await FQLocalMath.action('stop');}catch(e){probeText=String(e.message||e);}if(valid())update();return;}
+  if(busy||smartBusy)return;
   if(name==='download'&&!await confirmBox('مدل رسمی حدود ۲.۵ گیگابایت است. حداقل ۲.۷ گیگابایت فضای خالی لازم است. دانلود آغاز شود؟','دانلود مدل',false))return;
   if(!valid())return;busy=true;pending=name==='test'?'در حال بارگذاری واقعی مدل و آزمایش ۱۷ + ۲۵…':'در حال انجام…';panel.querySelector('.fq-model-error').textContent=pending;panel.querySelectorAll('[data-model]').forEach(x=>x.disabled=true);
   try{const r=await FQLocalMath.action(name);if(name==='test')probeText=(r.passed?'✅ تست اولیه موفق: ':'تست ناموفق: ')+String(r.text||'')+' — '+(Number(r.ms||0)/1000).toFixed(1)+' ثانیه';else probeText='';}
@@ -92,7 +95,7 @@ function pageSmartAssistant(){
  const limited=!chatPaid()&&chatFreeLeft()===0;
  const history=smartTalk.length?smartTalk.map((m,i)=>'<article class="fq-msg '+(m.role==='user'?'fq-user':'fq-bot')+'"><div class="fq-chat-meta"><b>'+(m.role==='user'?'شما':'دستیار حسابداری')+'</b><time datetime="'+esc(new Date(m.at).toISOString())+'">'+esc(smartStamp(m))+'</time></div><div class="fq-chat-text">'+esc(m.text)+'</div>'+(m.source?'<small class="hint">'+esc(m.source)+'</small>':'')+(m.details?.length?'<ul>'+m.details.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+(m.unit&&m.unit!==Core.unit?smartMathTable(m.rows,m.unit):smartMathTable(m.rows))+(m.actions?.length?'<div class="chips wrap">'+m.actions.map(x=>'<button type="button" class="chip" data-act="go" data-h="'+esc(x.route)+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+'<div class="fq-chat-actions"><button type="button" class="fq-chat-tool" data-chat-copy="'+i+'">کپی</button>'+(m.role==='assistant'?'<button type="button" class="fq-chat-tool" data-chat-pdf="'+i+'">PDF پاسخ</button>':'')+'</div></article>').join(''):'<div class="hint center">سؤال جدید خود را در حالت انتخاب‌شده بنویسید.</div>';
  const html='<section class="ui20-chat"><div class="fq-chat-top"><div class="ui2-chat-head"><div class="ch">'+ico('chat')+'دستیار آفلاین</div><span class="fq-chat-quota" aria-live="polite">'+esc(chatUsageText())+'</span><button type="button" class="fq-chat-tool" id="fq-chat-data-access" role="switch" aria-checked="'+smartDataAccess+'"'+(smartBusy?' disabled':'')+'>دسترسی به اطلاعات برنامه: '+(smartDataAccess?'روشن':'خاموش')+'</button><span class="fq-chat-quota">'+(smartDataAccess?'گزارش‌گیری از اطلاعات مجاز برنامه و محاسبه':'فقط حل مسئله؛ بدون دسترسی به انبار، چک‌ها و حساب اشخاص')+'</span><div class="fq-chat-top-actions"><button type="button" class="fq-chat-tool" id="fq-chat-pdf"'+(smartTalk.length?'':' disabled')+'>'+ico('file')+' PDF گفتگو</button><button type="button" class="fq-chat-tool" id="fq-chat-reset">'+ico('plus')+' گفت‌وگوی جدید</button></div></div></div><div class="ui20-scroll">'+
- (smartDataAccess?'':'<div class="card" id="fq-local-model"><b>مدل تحلیل‌گر محلی · ۴B</b><div class="hint fq-model-status" aria-live="polite">بررسی وضعیت…</div><div class="chips wrap"><button type="button" class="chip" data-model="download" hidden>دانلود مستقیم (۲.۵ GB)</button><button type="button" class="chip" data-model="importModel" hidden>انتخاب فایل GGUF</button><button type="button" class="chip" data-model="cancelDownload" hidden>لغو دانلود</button><button type="button" class="chip" data-model="test" hidden>تست واقعی مدل</button></div><small class="hint fq-model-error"></small><small class="hint">حالت آزمایشی؛ مدل بدون اطلاعات حسابداری اجرا می‌شود.</small></div>')+
+ (smartDataAccess?'':'<div class="card" id="fq-local-model"><b>مدل تحلیل‌گر محلی · ۴B</b><div class="hint fq-model-status" aria-live="polite">بررسی وضعیت…</div><div class="chips wrap"><button type="button" class="chip" data-model="download" hidden>دانلود مستقیم (۲.۵ GB)</button><button type="button" class="chip" data-model="importModel" hidden>انتخاب فایل GGUF</button><button type="button" class="chip" data-model="cancelDownload" hidden>لغو دانلود</button><button type="button" class="chip" data-model="test" hidden>تست واقعی مدل</button><button type="button" class="chip warn" data-model="stop" hidden>توقف امن موتور</button></div><small class="hint fq-model-error"></small><small class="hint">حالت آزمایشی؛ مدل بدون اطلاعات حسابداری اجرا می‌شود.</small></div>')+
  (smartDataAccess?'<details class="ui2-chat-intro"><summary>راهنمای گزارش‌گیری</summary><p class="hint">پرسش درباره فروش، سود، کالا، اشخاص و سررسیدها؛ هیچ ثبت مالی تغییر نمی‌کند.</p></details>':'<div class="hint">محاسبه صرفاً با اعداد و توضیحات خودتان انجام می‌شود.</div>')+
  '<div id="fq-chat-history" class="fq-chat-history" aria-live="polite">'+history+(smartBusy?'<div class="fq-chat-progress" role="status">در حال محاسبه آفلاین…</div>':'')+'</div>'+
  (limited?'<div class="alert warn">سهمیه ۵۰ سؤال پایان یافته است. پاسخ‌های قبلی قابل کپی و خروجی PDF هستند؛ برای سؤال جدید فعال‌سازی کنید. این محدودیت روی ثبت اسناد اثر ندارد.<button type="button" class="btn blue" id="fq-chat-activate">فعالسازی · سالانه '+esc(License.PRICE_TEXT)+'</button></div>':'')+
@@ -100,7 +103,7 @@ function pageSmartAssistant(){
  '<form id="fq-chat-form" class="card ui2-chat-compose"><div class="fq-chat-input-wrap"><div class="fq-chat-compose-tools"><button type="button" class="fq-chat-tool" id="fq-chat-expand" aria-expanded="false">بزرگ کردن</button><button type="button" class="fq-chat-tool" id="fq-chat-keyboard">'+ico('keyboard')+' بستن صفحه‌کلید</button></div><textarea id="fq-chat-input" class="inp" rows="1" maxlength="4000"'+(limited?' disabled':'')+' aria-label="سؤال جدید" placeholder="مسئله مالی، ریاضی یا سؤال حسابداری خود را بنویسید…" required></textarea></div><button class="btn blue" type="submit" aria-label="ارسال سؤال"'+(smartBusy||limited?' disabled':'')+'>'+ico('send')+'</button></form></section>';
  return {title:'دستیار حسابداری',html,back:'#/home',mount:()=>{
   $('#fq-chat-form').onsubmit=e=>{e.preventDefault();const box=$('#fq-chat-input');const value=box.value;if(!value.trim()||smartBusy)return;box.blur();smartAskQuestion(value);};
-  $('#fq-chat-reset').onclick=async()=>{const owner=smartCurrentUser();if((smartTalk.length||smartDraft.trim())&&!await confirmBox('گفت‌وگوی فعلی و متن در حال تایپ پاک می‌شوند. ابتدا در صورت نیاز PDF بگیرید.','شروع گفت‌وگوی جدید',true))return;if(!smartAccess(owner))return;if(smartBusy&&!smartDataAccess)FQLocalMath.action('stop').catch(()=>{});smartJob++;smartBusy=false;smartTalk=[];smartContext={};smartDraft='';smartExpanded=false;document.body.classList.remove('fq-chat-typing');render();};
+  $('#fq-chat-reset').onclick=async()=>{const owner=smartCurrentUser();if((smartTalk.length||smartDraft.trim())&&!await confirmBox('گفت‌وگوی فعلی و متن در حال تایپ پاک می‌شوند. ابتدا در صورت نیاز PDF بگیرید.','شروع گفت‌وگوی جدید',true))return;if(!smartAccess(owner))return;if(!smartDataAccess)FQLocalMath.action('stop').catch(()=>{});smartJob++;smartBusy=false;smartTalk=[];smartContext={};smartDraft='';smartExpanded=false;document.body.classList.remove('fq-chat-typing');render();};
   $('#fq-chat-pdf').onclick=e=>smartPdf(e.currentTarget);
   $('#fq-chat-data-access').onclick=smartToggleData;
   if(!smartDataAccess)smartMountModel();
@@ -113,7 +116,7 @@ function pageSmartAssistant(){
 async function smartAskQuestion(text){
  smartResetForUser();const q=String(text||'').trim(),owner=smartCurrentUser();if(!q||!owner||smartBusy||location.hash.split('?')[0]!=='#/assistant')return;
  if(!chatPaid()&&chatFreeLeft()===0){paywall('chat');return;}
- if(!smartDataAccess){try{const state=await FQLocalMath.status();if(!smartAccess(owner)||smartDataAccess||smartBusy)return;if(!state.ready){toast('ابتدا فایل مدل محلی را دانلود یا انتخاب و تأیید کنید.',true);return;}}catch(e){toast('بررسی مدل ناموفق: '+String(e.message||e),true);return;}}
+ if(!smartDataAccess){try{const state=await FQLocalMath.status();if(!smartAccess(owner)||smartDataAccess||smartBusy)return;if(state.running){toast('مدل در حال اجراست؛ از دکمه توقف امن استفاده کنید.',true);return;}if(!state.ready){toast('ابتدا فایل مدل محلی را دانلود یا انتخاب و تأیید کنید.',true);return;}}catch(e){toast('بررسی مدل ناموفق: '+String(e.message||e),true);return;}}
  const permissions=smartPerms;
  const opts=()=>({today:today(),allow:permissions()});
  const context=smartContext,dataAccess=smartDataAccess,job=++smartJob,auth=JSON.stringify(permissions()),valid=()=>job===smartJob&&owner===smartCurrentUser()&&location.hash.split('?')[0]==='#/assistant'&&JSON.stringify(permissions())===auth;
@@ -128,7 +131,7 @@ async function smartAskQuestion(text){
  if(!valid())return;
  smartContext=out.ctx||{};smartTalk.push({role:'assistant',text:out.text,details:out.details,actions:out.actions,source:out.source||'دستیار حسابداری',rows:out.rows,at:Date.now(),unit});render();
 }
-if(typeof window!=='undefined')window.addEventListener('hashchange',()=>{if(location.hash.split('?')[0]!=='#/assistant'){smartEditorDispose?.();smartEditorDispose=null;if(smartBusy&&!smartDataAccess)FQLocalMath.action('stop').catch(()=>{});smartJob++;smartBusy=false;smartTalk=[];smartContext={};smartDraft='';smartExpanded=false;smartDataAccess=false;smartModeSessions={};document.body.classList.remove('fq-chat-typing');document.body.style.removeProperty('--fq-chat-view');}});
+if(typeof window!=='undefined')window.addEventListener('hashchange',()=>{if(location.hash.split('?')[0]!=='#/assistant'){smartEditorDispose?.();smartEditorDispose=null;if(!smartDataAccess)FQLocalMath.action('stop').catch(()=>{});smartJob++;smartBusy=false;smartTalk=[];smartContext={};smartDraft='';smartExpanded=false;smartDataAccess=false;smartModeSessions={};document.body.classList.remove('fq-chat-typing');document.body.style.removeProperty('--fq-chat-view');}});
 
 async function smartGuardConfirm(kind, candidate, editId){
   const issues=Core.smartGuard.preflight(S,kind,candidate,{editingId:editId||null,today:today()});

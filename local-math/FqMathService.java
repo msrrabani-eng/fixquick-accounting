@@ -17,6 +17,10 @@ public final class FqMathService extends Service {
     static native byte[] nativeRun(byte[] path,byte[] prompt,int max);
     static native void nativeStop();
     static native void nativeReset();
+    static native int nativeStage();
+    static native int nativePercent();
+    static native int nativeTokens();
+    private final Handler ticker=new Handler(Looper.getMainLooper());
     private final Messenger inbound=new Messenger(new Handler(Looper.getMainLooper(),msg->{
         if(msg.what==2){if(loaded)nativeStop();return true;}
         if(msg.what!=1||msg.replyTo==null)return true;
@@ -24,6 +28,8 @@ public final class FqMathService extends Service {
         if(!loaded||!running.compareAndSet(false,true)){send(reply,null,"Native engine unavailable or busy",0);return true;}
         final Bundle args=msg.getData();final String prompt=args.getString("prompt","");final int limit=args.getInt("max",640);
         nativeReset();
+        final Runnable heartbeat=new Runnable(){public void run(){if(!running.get())return;try{Message m=Message.obtain(null,4);Bundle b=new Bundle();int stage=nativeStage();b.putString("stage",stage==2?"context":stage==3?"prompt":stage==4?"generating":"loading");b.putInt("percent",nativePercent());b.putInt("tokens",nativeTokens());m.setData(b);reply.send(m);}catch(RemoteException ignored){}ticker.postDelayed(this,1000);}};
+        ticker.post(heartbeat);
         worker.execute(()->{
             long start=SystemClock.elapsedRealtime();String answer=null,error=null;
             try{
@@ -33,7 +39,7 @@ public final class FqMathService extends Service {
                 byte[] data=nativeRun(model.getAbsolutePath().getBytes(StandardCharsets.UTF_8),prompt.getBytes(StandardCharsets.UTF_8),limit);
                 answer=new String(data,StandardCharsets.UTF_8);
             }catch(Throwable e){error=e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();}
-            finally{running.set(false);}
+            finally{running.set(false);ticker.removeCallbacks(heartbeat);}
             send(reply,answer,error,SystemClock.elapsedRealtime()-start);
         });
         return true;
@@ -42,5 +48,9 @@ public final class FqMathService extends Service {
         try{Message m=Message.obtain(null,3);Bundle b=new Bundle();b.putString("text",answer);b.putString("error",error);b.putLong("ms",ms);m.setData(b);reply.send(m);}catch(RemoteException ignored){}
     }
     @Override public IBinder onBind(Intent i){return inbound.getBinder();}
-    @Override public void onDestroy(){if(loaded)nativeStop();worker.shutdown();super.onDestroy();}
+    @Override public boolean onUnbind(Intent i){if(loaded&&running.get())nativeStop();return false;}
+    @Override public void onDestroy(){if(loaded)nativeStop();ticker.removeCallbacksAndMessages(null);worker.shutdown();super.onDestroy();
+        // Only this dedicated inference process may be terminated. No database or model writes.
+        if(running.get())android.os.Process.killProcess(android.os.Process.myPid());
+    }
 }

@@ -49,6 +49,7 @@ jobs:
           node tests/vol033.test.js
           node tests/vol035.test.js
           node tests/vol036.test.js
+          node tests/vol037.test.js
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |
@@ -101,9 +102,6 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools'
-
-      - name: Prepare one-time storage cleanup on update
-        run: python3 tools/install_storage_cleanup.py
 
       - name: Install isolated native math engine
         run: |

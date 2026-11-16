@@ -10,8 +10,11 @@ for name in ['FqMathPlugin.java','FqMathService.java']:
     shutil.copy2(source/name,java/name)
 activity=java/'MainActivity.java'
 s=activity.read_text()
-assert 'super.onCreate(' in s
-s=s.replace('super.onCreate(', 'registerPlugin(FqMathPlugin.class);\n        super.onCreate(',1)
+if 'super.onCreate(' in s:
+    s=s.replace('super.onCreate(', 'registerPlugin(FqMathPlugin.class);\n        super.onCreate(',1)
+else:
+    s,n=re.subn(r'(class MainActivity extends BridgeActivity\s*\{)',r'\1\n    @Override public void onCreate(android.os.Bundle savedInstanceState) {\n        registerPlugin(FqMathPlugin.class);\n        super.onCreate(savedInstanceState);\n    }\n',s,count=1)
+    assert n==1
 activity.write_text(s)
 manifest=app/'src/main/AndroidManifest.xml'
 s=manifest.read_text()
