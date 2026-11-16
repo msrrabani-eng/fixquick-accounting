@@ -27,7 +27,7 @@ assert.ok(!product('آیفون ۱۶ پرو ۲۵۶ گیگ',201).length);
 assert.ok(product('کابل شارژ مک‌دودو').some(x=>x.id===202));
 assert.ok(G.batch(st,'person',[{name:'فروشگاه الف',phone:'09351234567'},{name:'فروشگاه ب',phone:'+989351234567'}]).some(r=>r.matches.some(x=>x.phone&&String(x.id).startsWith('batch:'))));
 assert.equal(JSON.stringify(st),before,'read-only check must not alter any records');
-const pages=fs.readFileSync(require.resolve('../www/pages.js'),'utf8'),ui=fs.readFileSync(require.resolve('../www/smart-ui.js'),'utf8');
+const pages=fs.readFileSync(require.resolve('../www/pages.js'),'utf8'),ui=fs.readFileSync(require.resolve('../www/safety-ui.js'),'utf8');
 const html=fs.readFileSync(require.resolve('../www/index.html'),'utf8'),sw=fs.readFileSync(require.resolve('../www/sw.js'),'utf8');
 for(const s of ["entityLive(sh.q('#pf'),'person',p&&p.id)","entityConfirm(f,'person',d,p&&p.id)","entityLive(f,'product',p&&p.id)","entityConfirm(f,'product',d,p&&p.id)","entityLive(sh.q('#pq'),'person',null)","entityConfirm(f,'person',d,null)","entityBatchConfirm('person',candidates)","entityBatchConfirm('product',fresh)"])assert.ok(pages.includes(s),s);
 assert.ok(ui.includes("document.createElement('details')")&&ui.includes('sum.textContent=')&&ui.includes('li.textContent=entityMatchText(m,kind)')&&ui.includes('entityPending'));

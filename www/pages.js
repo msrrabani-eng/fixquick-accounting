@@ -25,7 +25,7 @@ function pageHome() {
   if (S.settings.auditIssues > 0 && isAdmin()) h += '<div class="alert warn">' + ico('alert') + 'بررسی خودکار هفتگی ' + fa(S.settings.auditIssues) + ' ناهماهنگی در اطلاعات پیدا کرد. <button class="lnk" data-act="audit">جزئیات</button></div>';
   if (can('backup') && hasData && (days === null || days > 7)) h += '<div class="alert warn">' + ico('save') + (days === null ? 'هنوز پشتیبان نگرفته‌اید.' : 'آخرین پشتیبان ' + fa(days) + ' روز پیش بوده.') + ' <button class="lnk" data-act="saveLocal">ذخیره کن</button></div>';
   h += '<button class="gsbar" data-act="go" data-h="#/search">' + ico('search') + '<span>جستجو یا سؤال: «آیفون ۱۶ از کی خریدیم»…</span></button>';
-  h += '<div class="row2 fq-smart-actions"><button class="btn ghost" data-act="go" data-h="#/assistant" aria-label="دستیار حسابداری">' + ico('chat') + 'دستیار حسابداری</button>' + (can('reports') ? '<button class="btn ghost" data-act="go" data-h="#/safety">' + ico('shield') + 'کنترل خطا</button>' : '') + '</div>';
+  if (can('reports')) h += '<div class="fq-smart-actions"><button class="btn ghost" data-act="go" data-h="#/safety">' + ico('shield') + 'کنترل خطا</button></div>';
   // one tap to every everyday job
   const big = [[true, 'newInv', 'sale', 'receipt', 'فروش', 'green'], [can('purchase'), 'newInv', 'purchase', 'cart', 'خرید', 'blue']].filter(x => x[0]);
   const small = [ [can('money'), 'quickTx', 'receipt', 'in', 'دریافت'], [can('money'), 'quickTx', 'payment', 'out', 'پرداخت'], [can('money') && feat('cheques'), 'addCheque', '', 'cheque', 'ثبت چک'], [can('money') && feat('cheques'), 'spendChequeHome', '', 'cheque', 'خرج چک'], [can('money') && feat('transfer'), 'transfer', '', 'transfer', 'حواله'], [can('money') && feat('expenses'), 'addExpense', '', 'wallet', 'هزینه'], [true, 'newInv', 'sale_return', 'ret', 'برگشتی']].filter(x => x[0]);
@@ -763,7 +763,7 @@ function pageSettings(section) {
   } else h += '<div class="card"><div class="ch">' + ico('user') + 'حساب کاربری</div><p class="hint">وارد شده با: <b>' + esc(CUR.user) + '</b> (کاربر زیرمجموعه)</p><button class="btn ghost" data-act="logout">' + ico('lock') + 'خروج و قفل برنامه</button></div>';
   next('security','حساب کاربری و دسترسی‌ها','lock','رمز، کاربران، قفل اسناد و بخش‌های برنامه');
   const left = freeLeft();
-  if (isAdmin()) h += '<div class="card"><div class="ch">' + ico('star') + 'نسخه برنامه</div>' + (licOk ? '<p class="hint">' + ico('check') + licStatus() + '</p>' : licExpired() ? '<p class="hint debit">' + licStatus() + '</p>' : '<p class="hint">نسخه رایگان: ' + fa(Math.min(usedDocs(), License.FREE_LIMIT)) + ' از ' + fa(License.FREE_LIMIT) + ' فاکتور و سند استفاده شده (' + fa(left) + ' باقی‌مانده).</p>') + '<p class="hint">'+esc(chatUsageText())+'</p><p class="hint">هزینه اشتراک سالانه: '+esc(License.PRICE_TEXT)+'</p><button class="btn ' + (licOk ? 'ghost' : 'blue') + '" data-act="activate">' + (licOk ? 'جزئیات نسخه نامحدود' : ico('star') + 'فعال‌سازی نسخه نامحدود') + '</button></div>';
+  if (isAdmin()) h += '<div class="card"><div class="ch">' + ico('star') + 'نسخه برنامه</div>' + (licOk ? '<p class="hint">' + ico('check') + licStatus() + '</p>' : licExpired() ? '<p class="hint debit">' + licStatus() + '</p>' : '<p class="hint">نسخه رایگان: ' + fa(Math.min(usedDocs(), License.FREE_LIMIT)) + ' از ' + fa(License.FREE_LIMIT) + ' فاکتور و سند استفاده شده (' + fa(left) + ' باقی‌مانده).</p>') + '<p class="hint">هزینه اشتراک سالانه: '+esc(License.PRICE_TEXT)+'</p><button class="btn ' + (licOk ? 'ghost' : 'blue') + '" data-act="activate">' + (licOk ? 'جزئیات نسخه نامحدود' : ico('star') + 'فعال‌سازی نسخه نامحدود') + '</button></div>';
   next('license','اشتراک و نسخه برنامه','star','فعال‌سازی و وضعیت مجوز');
   const errN = diagLoad().length;
   h += '<div class="card"><div class="ch">' + ico('wrench') + 'گزارش خطا</div><p class="hint">اگر برنامه درست کار نکرد یا بسته شد، این گزارش را برای پشتیبانی بفرستید. فقط اطلاعات فنی (نسخه، گوشی، متن خطا) فرستاده می‌شود؛ نام اشخاص و مبالغ در آن نیست.</p><p class="hint">خطاهای ثبت‌شده: <b>' + fa(errN) + '</b></p><div class="row2"><button class="btn green" data-act="reportWa">ارسال در واتساپ</button><button class="btn ghost" data-act="reportShare">کپی / ارسال</button></div>' + (errN ? '<button class="lnk center" data-act="reportClear">پاک‌کردن خطاهای ثبت‌شده</button>' : '') + '</div>';
@@ -853,7 +853,6 @@ function setPin() {
 /* ─────────── actions ─────────── */
 const actions = {
   mixedChoose:d=>mixedChoose(+d.p||null),mixedView:d=>mixedView(+d.id),mixedInvPay:d=>{const i=Core.byId(S.invoices,+d.id);if(!i||!can('money'))return;mixedEditor({type:['sale','purchase_return'].includes(i.type)?'receipt':'payment',personId:i.personId,invoiceId:i.id,total:Core.invoiceInfo(S,i).remaining});},
-  fqChatExample: d => smartAskQuestion(d.q),
   go: d => { goHash(d.h); },
   chip: d => { UI[d.k] = d.v; if (d.k === 'prodCat') UI.limProd = 100; if (d.k === 'repTab' || d.k === 'rep') UI.limRep = 60; if (d.k === 'rep' && d.v === 'custom' && !UI.repFrom) { UI.repFrom = Core.periodRange('month').from; UI.repTo = today(); } render(); },
   addPerson: () => personForm(), editPerson: d => personForm(Core.byId(S.people, +d.p)),
@@ -974,9 +973,9 @@ function personFormInline() { // quick-add from invoice picker
 const routes = {
   summary: pageAccountSummary, support: pageSupport, mixed:pageMixed,
   home: pageHome, people: pagePeople, person: pagePerson, invoices: pageInvoices, inv: pageInvoice, edit: (a) => { const i = Core.byId(S.invoices, +a); return i ? pageNewInvoice(i.type, { edit: i }) : { title: 'ویرایش', html: empty(ico('help'), 'فاکتور پیدا نشد.'), back: '#/invoices' }; }, new: (a) => pageNewInvoice(a, Object.fromEntries(new URLSearchParams((location.hash.split('?')[1]) || ''))),
-  search: pageSearch, assistant: pageSmartAssistant, safety: pageSafety, products: pageProducts, stock: pageStock, kardex: pageKardex, cheques: pageCheques, expenses: pageExpenses, reports: pageReports, more: pageMore, settings: pageSettings, accounts: pageAccounts, acct: pageAcct, recon: pageRecon, vouchers: pageVouchers, coa: pageCoa, fiscal: pageFiscal, warehouses: pageWarehouses, wh: pageWh
+  search: pageSearch, safety: pageSafety, products: pageProducts, stock: pageStock, kardex: pageKardex, cheques: pageCheques, expenses: pageExpenses, reports: pageReports, more: pageMore, settings: pageSettings, accounts: pageAccounts, acct: pageAcct, recon: pageRecon, vouchers: pageVouchers, coa: pageCoa, fiscal: pageFiscal, warehouses: pageWarehouses, wh: pageWh
 };
-const navMap = { mixed:'more', summary:'more', support:'more', assistant: 'home', safety: 'home', vouchers: 'more', coa: 'more', fiscal: 'more', warehouses: 'products', wh: 'products', search: 'home', home: 'home', people: 'people', person: 'people', invoices: 'invoices', inv: 'invoices', edit: 'invoices', new: 'invoices', products: 'products', stock: 'products', kardex: 'products', more: 'more', cheques: 'more', expenses: 'more', reports: 'more', settings: 'more', accounts: 'more', acct: 'more', recon: 'more' };
+const navMap = { mixed:'more', summary:'more', support:'more', safety: 'home', vouchers: 'more', coa: 'more', fiscal: 'more', warehouses: 'products', wh: 'products', search: 'home', home: 'home', people: 'people', person: 'people', invoices: 'invoices', inv: 'invoices', edit: 'invoices', new: 'invoices', products: 'products', stock: 'products', kardex: 'products', more: 'more', cheques: 'more', expenses: 'more', reports: 'more', settings: 'more', accounts: 'more', acct: 'more', recon: 'more' };
 let lastRoute = '';
 // update the page around a text box the user is typing in, without ever touching that box
 // (re-creating it drops letters on Android keyboards that are still composing a word)
@@ -1269,30 +1268,13 @@ function bumpUsage() { const n = usedDocs(); S.settings.usedDocs = n; try { loca
 function freeLeft() { return Math.max(0, License.FREE_LIMIT - usedDocs()); }
 // call before creating a new invoice / receipt / payment / transfer / expense
 function gate() { if (licOk || freeLeft() > 0) return true; paywall(true); return false; }
-function chatStoredUsage(){try{return localStorage.getItem(License.CHAT_USAGE_KEY);}catch(_){return null;}}
-function chatUsed(){return License.chatCount(S.settings,chatStoredUsage());}
-function chatFreeLeft(){return License.chatLeft(S.settings,chatStoredUsage());}
-function chatPaid(){return licOk&&!licExpired();}
-function chatUsageText(){return chatPaid()?'دستیار نامحدود فعال است.':'سؤال رایگان دستیار: '+fa(chatUsed())+' از '+fa(License.CHAT_FREE_LIMIT)+' ('+fa(chatFreeLeft())+' باقی‌مانده).';}
-async function chatReserve(){
- const decision=License.chatDecision(chatPaid(),S.settings,chatStoredUsage());
- if(!decision.allowed)return false;
- if(!decision.consume)return true;
- // Device-wide monotonic counter, independent of documents and chat history.
- // Persist before replying; also mirror to the accounting backup settings.
- let localOK=false;try{localStorage.setItem(License.CHAT_USAGE_KEY,String(decision.next));localOK=Number(localStorage.getItem(License.CHAT_USAGE_KEY))===decision.next;}catch(_){}
- S.settings.usedChat=decision.next;
- const saved=await save();
- if(!saved&&!localOK){toast('ذخیره سهمیه سؤال ممکن نیست؛ دوباره تلاش کنید.',true);return false;}
- return true;
-}
 async function paywall(blocked) {
-  const dev = await myDeviceCode(), used = usedDocs(), chatBlocked = blocked==='chat';
+  const dev = await myDeviceCode(), used = usedDocs();
   const renew = licExpired() || (licOk && licInfo.exp && licDaysLeft() <= 30), done = licOk && !renew;
   const msg = 'سلام، درخواست ' + (renew ? 'تمدید' : 'فعال‌سازی') + ' نسخه نامحدود حسابداری فیکس کوییک را دارم.\nکد دستگاه: ' + dev + '\n(تصویر رسید واریز را هم می‌فرستم)';
   const sh = sheet(done ? 'نسخه نامحدود' : renew ? 'تمدید نسخه نامحدود' : 'فعال‌سازی نسخه نامحدود', done ? '<div class="alert">' + ico('check') + licStatus() + '</div><p class="hint">' + esc(License.TERM_TEXT) + '</p><p class="hint">کد دستگاه: <b class="ltr">' + dev + '</b></p>' :
-    (chatBlocked ? '<div class="alert warn">۵۰ سؤال رایگان دستیار حسابداری تمام شده است. برای ادامه استفاده از دستیار، نسخه نامحدود را فعال کنید. '+(freeLeft()>0?'تا سقف مستقل ۵۰ سند، ثبت اسناد همچنان امکان‌پذیر است.':'سقف رایگان اسناد نیز تمام شده است.')+'</div>' : renew ? '<div class="alert' + (licExpired() ? ' warn' : '') + '">' + licStatus() + (licExpired() ? ' اطلاعات شما سالم است و می‌توانید همه را ببینید، پشتیبان بگیرید و چاپ کنید؛ برای ثبت سند جدید تمدید کنید.' : ' برای ادامه بدون وقفه، از همین حالا تمدید کنید؛ اعتبار تازه از روز صدور کد حساب می‌شود.') + '</div>' : blocked ? '<div class="alert warn">ثبت رایگان شما (' + fa(License.FREE_LIMIT) + ' فاکتور و سند) تمام شده است. اطلاعات شما سالم است و می‌توانید همه را ببینید، پشتیبان بگیرید و چاپ کنید؛ برای ثبت جدید، نسخه نامحدود را فعال کنید.</div>' : '<p class="hint">تا الان ' + fa(Math.min(used, License.FREE_LIMIT)) + ' از ' + fa(License.FREE_LIMIT) + ' سند رایگان استفاده شده است.</p>') +
-    '<p class="hint">'+esc(chatUsageText())+' · اسناد رایگان باقی‌مانده: '+fa(freeLeft())+'</p><div class="paybox"><div class="step"><b>۱</b><span>هزینه اشتراک سالانه: <b>' + esc(License.PRICE_TEXT) + '</b><br>برای فعال‌سازی، مبلغ را به کارت زیر واریز کنید:<br><b class="ltr cardno">' + esc(License.CARD_NO) + '</b><br>به نام ' + esc(License.CARD_OWNER) + ' · ' + esc(License.CARD_BANK) + '<br><button type="button" class="lnk" id="pw-card">کپی شماره کارت</button><br><small class="hint">' + esc(License.TERM_TEXT) + '</small></span></div>' +
+    (renew ? '<div class="alert' + (licExpired() ? ' warn' : '') + '">' + licStatus() + (licExpired() ? ' اطلاعات شما سالم است و می‌توانید همه را ببینید، پشتیبان بگیرید و چاپ کنید؛ برای ثبت سند جدید تمدید کنید.' : ' برای ادامه بدون وقفه، از همین حالا تمدید کنید؛ اعتبار تازه از روز صدور کد حساب می‌شود.') + '</div>' : blocked ? '<div class="alert warn">ثبت رایگان شما (' + fa(License.FREE_LIMIT) + ' فاکتور و سند) تمام شده است. اطلاعات شما سالم است و می‌توانید همه را ببینید، پشتیبان بگیرید و چاپ کنید؛ برای ثبت جدید، نسخه نامحدود را فعال کنید.</div>' : '<p class="hint">تا الان ' + fa(Math.min(used, License.FREE_LIMIT)) + ' از ' + fa(License.FREE_LIMIT) + ' سند رایگان استفاده شده است.</p>') +
+    '<p class="hint">اسناد رایگان باقی‌مانده: '+fa(freeLeft())+'</p><div class="paybox"><div class="step"><b>۱</b><span>هزینه اشتراک سالانه: <b>' + esc(License.PRICE_TEXT) + '</b><br>برای فعال‌سازی، مبلغ را به کارت زیر واریز کنید:<br><b class="ltr cardno">' + esc(License.CARD_NO) + '</b><br>به نام ' + esc(License.CARD_OWNER) + ' · ' + esc(License.CARD_BANK) + '<br><button type="button" class="lnk" id="pw-card">کپی شماره کارت</button><br><small class="hint">' + esc(License.TERM_TEXT) + '</small></span></div>' +
     '<div class="step"><b>۲</b><span>تصویر رسید و کد دستگاه زیر را در واتساپ بفرستید:<br><b class="ltr devc">' + dev + '</b></span></div><div class="row2"><button type="button" class="btn green" id="pw-wa">ارسال در واتساپ</button><button type="button" class="btn ghost" data-act="copyDev">کپی کد دستگاه</button></div>' +
     '<div class="step"><b>۳</b><span>کد فعال‌سازی را که برایتان فرستاده می‌شود اینجا بچسبانید:</span></div><textarea class="inp ltr" id="pw-code" rows="3" style="height:auto;padding:10px" placeholder="XXXXX-XXXXX-…"></textarea><button type="button" class="btn blue" id="pw-ok">فعال‌سازی</button></div><p class="hint">کد فعال‌سازی فقط روی همین گوشی کار می‌کند.</p>');
   if (done) return;

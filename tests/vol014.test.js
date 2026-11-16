@@ -2,7 +2,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs');
 const C=require('../www/core.js');
 const G=require('../www/smartguard.js');
-const A=require('../www/assistant-brain.js');
 C.setUnit('rial');
 const TODAY='2026-11-13';
 const st=C.emptyState();
@@ -29,42 +28,13 @@ assert.ok(G.preflight(st,'transfer',{fromId:1,toId:1,amount:200,date:TODAY},{tod
 assert.ok(G.scan(st,{today:TODAY}).count===0);
 st.tx.push({...st.tx[st.tx.length-1],id:998});assert.ok(G.scan(st,{today:TODAY}).items.some(x=>x.code==='duplicate-tx'));st.tx.pop();
 assert.equal(before(),unchanged,'risk checks must not modify accounting records');
-// Chat: financial data only from state, no external API, scoped permission checks.
-let r=A.ask(st,'مانده حساب علی رضایی چقدر است؟',{}, {today:TODAY,allow:{balances:true}});
-assert.ok(r.text.includes('علی رضایی'));assert.equal(r.ctx.personId,ali.id);
-const follow=A.ask(st,'ایشون چقدر بدهکاره؟',r.ctx,{today:TODAY,allow:{balances:true}});
-assert.ok(follow.text.includes('علی رضایی'),'followup should retain person');
-assert.ok(A.ask(st,'مانده حساب علی رضایی',{}, {today:TODAY,allow:{balances:false}}).text.includes('مجوز'));
-assert.ok(A.ask(st,'سود این ماه',{}, {today:TODAY,allow:{reports:true,cost:false}}).text.includes('مجوز'));
-assert.ok(A.ask(st,'گزارش خطاها',{}, {today:TODAY,allow:{reports:true}}).actions.some(x=>x.route==='#/safety'));
-assert.ok(A.ask(st,'چک‌های ۷ روز آینده',{}, {today:TODAY,allow:{money:true}}).text.includes('۲۵,۰۰۰,۰۰۰'));
-assert.ok(A.ask(st,'فروش این ماه',{}, {today:TODAY,allow:{reports:true}}).text.includes('فروش خالص'));
-assert.ok(A.ask(st,'هزینه ماه قبل',{}, {today:TODAY,allow:{reports:true}}).text.includes('هزینه'));
-assert.ok(A.ask(st,'چطور کره ماه را ببینم',{}, {today:TODAY}).text.includes('پاسخ محاسباتی مطمئنی ندارم'));
-assert.equal(before(),unchanged,'chat requests must not write accounts');
-// Conversational periods and entity filters must NOT leak a global total in a person-specific question.
-const st2=C.emptyState();
-const a2=C.addPerson(st2,{name:'محمد رستمی'}).person;
-const b2=C.addPerson(st2,{name:'عباس رضایی'}).person;
-const product=C.addProduct(st2,{name:'کابل آیفون'}).product;
-assert.ok(C.addInvoice(st2,{type:'purchase',personId:b2.id,date:'2026-10-10',items:[{productId:product.id,qty:20,price:1000}]}).ok);
-assert.ok(C.addInvoice(st2,{type:'sale',personId:a2.id,date:'2026-11-10',items:[{productId:product.id,qty:2,price:2000}]}).ok);
-assert.ok(C.addInvoice(st2,{type:'sale',personId:b2.id,date:'2026-11-10',items:[{productId:product.id,qty:1,price:5000}]}).ok);
-const q1=A.ask(st2,'فروش به محمد رستمی این ماه چقدر بود؟',{}, {today:TODAY,allow:{reports:true}});
-assert.ok(q1.text.includes('۴,۰۰۰'),'should use person-specific sales rather than global 9000');
-assert.ok(!q1.text.includes('۹,۰۰۰'));
-const q2=A.ask(st2,'ماه قبل چقدر بود؟',q1.ctx,{today:TODAY,allow:{reports:true}});
-assert.ok(q2.text.includes('صفر') || q2.text.includes('۰'),'should carry over same person and use previous Jalali month');
-assert.ok(A.ask(st2,'سود محمد رستمی چقدر بود؟',{}, {today:TODAY,allow:{reports:true,cost:true}}).text.includes('پشتیبانی نمی‌شود'));
-assert.ok(A.ask(st2,'فاکتورهای محمد رستمی',{}, {today:TODAY,allow:{reports:true}}).text.includes('۱'));
-
 const html=fs.readFileSync(require.resolve('../www/index.html'),'utf8');
 const pages=fs.readFileSync(require.resolve('../www/pages.js'),'utf8');
 const led=fs.readFileSync(require.resolve('../www/ledger.js'),'utf8');
 const workflow=fs.readFileSync(require.resolve('../.github/workflows/build-apk.yml'),'utf8');
-for(const name of ['smartguard.js','assistant-brain.js','smart-ui.js'])assert.ok(html.includes('<script src="'+name+'"></script>'));
+for(const name of ['smartguard.js','safety-ui.js'])assert.ok(html.includes('<script src="'+name+'"></script>'));
 for(const where of ['tx','expense','invoice','transfer'])assert.ok(pages.includes("smartGuardConfirm('"+where+"'"));
 assert.ok(led.includes("smartGuardConfirm('cheque',d,c&&c.id)"));
-assert.ok(pages.includes('assistant: pageSmartAssistant, safety: pageSafety'));
+assert.ok(pages.includes('safety: pageSafety'));
 assert.ok(workflow.includes('node tests/vol014.test.js'));
-console.log('v014: audit, duplicates, dates, forms, permissions, offline chat and followup tests passed');
+console.log('v014: audit, duplicates, dates and accounting forms tests passed');
