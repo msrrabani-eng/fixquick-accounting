@@ -5,8 +5,13 @@
   'use strict';
   const L = {};
   L.FREE_LIMIT = 50;
+  L.CHAT_FREE_LIMIT = 50;
+  L.CHAT_USAGE_KEY = 'fq_chat_used_v1';
+  L.chatCount = function(settings,stored){const clean=v=>{const n=Number(v);return Number.isFinite(n)&&n>=0?Math.min(L.CHAT_FREE_LIMIT,Math.floor(n)):0;};return Math.max(clean(settings?.usedChat),clean(stored));};
+  L.chatLeft = (settings,stored) => Math.max(0,L.CHAT_FREE_LIMIT-L.chatCount(settings,stored));
+  L.chatDecision = (active,settings,stored) => {const used=L.chatCount(settings,stored);return active?{allowed:true,used,next:used,consume:false}:used<L.CHAT_FREE_LIMIT?{allowed:true,used,next:used+1,consume:true}:{allowed:false,used,next:used,consume:false};};
   // owner settings shown on the payment screen — change here
-  L.PRICE_TEXT = '۲٬۵۰۰٬۰۰۰ تومان (۲۵٬۰۰۰٬۰۰۰ ریال)';
+  L.PRICE_TEXT = '۳٬۷۵۰٬۰۰۰ تومان (۳۷٬۵۰۰٬۰۰۰ ریال)';
   L.TERM_DAYS = 365; // a code made by the generator is valid this long
   L.TERM_TEXT = 'اعتبار یک‌ساله از روز فعال‌سازی. برای سال بعد، تمدید با قیمت روز و همراه آپدیت‌های جدید انجام می‌شود.';
   L.CARD_NO = '6219-8619-3578-1806';
