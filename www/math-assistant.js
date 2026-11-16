@@ -4,7 +4,7 @@
 const C=typeof module!=='undefined'&&module.exports?require('./core.js'):root.Core;
 const F=typeof module!=='undefined'&&module.exports?require('./finance-scenario.js'):C.financeScenario;
 const MAX=9000000000000n, B=10000n, maxMonths=360;
-const words={'اللَن':'الان','اللن':'الان','الالن':'الان','اللانی':'الان','اظافه':'اضافه','اظافش':'اضافه','اظافه‌':'اضافه','ماندش':'مانده اش','ماندشو':'مانده اش','محاسباته':'محاسبات','محاصبه':'محاسبه','محاسبه‌گر':'محاسبه گر','اقصاط':'اقساط','اغساط':'اقساط','اغساطی':'اقساطی','پرداختب':'پرداختی','پرداختت':'پرداخت','درصذ':'درصد','درسد':'درصد','درصت':'درصد','ملیون':'میلیون','میلون':'میلیون','ملیارد':'میلیارد','تومن':'تومان','تومون':'تومان','بدهکارر':'بدهکار','بدحسابی':'بدحسابی','ماهیانه':'ماهانه','ماهیون':'ماهانه','سودش':'سود آن','دسیار':'دستیار','چقد':'چقدر','چقدره':'چقدر','چطوریه':'چطور','میخواد':'می خواهد','میخام':'می خواهم','میده':'می دهد','میدم':'می دهم','بدم':'بدهم','بده':'بده','رو':'را'};
+const words={'اللَن':'الان','اللن':'الان','الالن':'الان','اللانی':'الان','اظافه':'اضافه','اظافش':'اضافه','اظافه‌':'اضافه','ماندش':'مانده اش','ماندشو':'مانده اش','محاسباته':'محاسبات','محاصبه':'محاسبه','محاسبه‌گر':'محاسبه گر','اقصاط':'اقساط','اغساط':'اقساط','اغساطی':'اقساطی','پرداختب':'پرداختی','پرداختت':'پرداخت','درصذ':'درصد','درسد':'درصد','درصت':'درصد','ملیون':'میلیون','میلون':'میلیون','ملیارد':'میلیارد','تومن':'تومان','تومون':'تومان','بدهکارر':'بدهکار','بدحسابی':'بدحسابی','ماهیانه':'ماهانه','ماهیون':'ماهانه','سودش':'سود آن','دسیار':'دستیار','گوشب':'گوشی','فرختم':'فروختم','درص':'درصد','فروختمم':'فروختم','خریدمم':'خریدم','چقد':'چقدر','چقدره':'چقدر','چطوریه':'چطور','میخواد':'می خواهد','میخام':'می خواهم','میده':'می دهد','میدم':'می دهم','بدم':'بدهم','بده':'بده','رو':'را'};
 function normalize(raw,protectedNames=[]){
  let s=C.toEn(String(raw??'')).normalize('NFKC').replace(/[\u0640\u064b-\u065f\u0670]/g,'').replace(/[يى]/g,'ی').replace(/ك/g,'ک').replace(/[أإآ]/g,'ا').replace(/[\u200c\u200e\u200f]/g,' ').replace(/[,٬](?=\d{3}(?:\D|$))/g,'').replace(/٫/g,'.').replace(/\s+/g,' ').trim();
  const fixes=[],protectedSet=new Set(protectedNames.flatMap(x=>C.norm(x).split(' ')));
@@ -106,7 +106,130 @@ function amend(s,d){
  if(/سود دوره اول ساده|سود تاخیر ساده|سود تأخیر ساده/.test(s)){v.delayMethod='simple';changed=true;}if(/سود دوره اول مرکب|سود تاخیر مرکب|سود تأخیر مرکب/.test(s)){v.delayMethod='compound';changed=true;}
  return changed?v:null;
 }
+
+/* Read-only word problems, before any report or inventory lookup. */
+const buyCue='خریدم|خریده ام|خریداری کردم|قیمت خرید|بهای خرید|قیمت اولیه خرید|بهای تمام شده';
+const sellCue='فروختم|فروخته ام|قیمت فروش|مبلغ فروش|فروش کردم|فروخته شد|می فروشم';
+function problemText(raw){return normalize(raw).text.replace(/(میلیون|میلیارد|هزار|تومان|ریال)ی(?=\s|[،.؟؛]|$)/g,'$1');}
+function safeAmount(a,u){const x=amountOf(a.raw,u||C.unit);return Number.isSafeInteger(x)&&x>=0&&BigInt(x)<=MAX?x:null;}
+function tradeProblem(raw){
+ const s=problemText(raw);
+ if(!new RegExp(buyCue).test(s)||!new RegExp(sellCue).test(s)||!/سود|زیان/.test(s)||/اقساط|قسط|چک|ماهانه|گزارش|طبق ثبت|بر اساس ثبت/.test(s))return null;
+ const aa=amounts(s);if(aa.length<2)return null;
+ const fail=()=>ask('برای محاسبه سود، قیمت خرید و فروش قبل از تخفیف، هزینه و تخفیف را جداگانه مشخص کنید. مبالغ مبهم یا فرضی را از انبار جستجو نمی‌کنم.');
+ if(rates(s).length||/پس از تخفیف|بعد از تخفیف|با احتساب تخفیف|چند دستگاه|چند معامله/.test(s))return fail();
+ // The existing exact two-price formal percentage route is retained.
+ if(aa.length===2&&!/هزینه|خرج|تخفیف|کارمزد|خریدم|فروختم|خریداری کردم/.test(s))return null;
+ const roles={buy:buyCue,sell:sellCue,cost:'هزینه(?:\\s+(?:جانبی|رجیستری|تعمیر|حمل|ارسال|بسته بندی))?|خرج(?:ش| آن)?(?: کردم)?|کارمزد',discount:'تخفیف(?: دادم| گرفت| دادیم)?'};
+ const assigned=[];
+ for(let i=0;i<aa.length;i++){
+  const a=aa[i],left=s.slice(i?aa[i-1].end:0,a.index),right=s.slice(a.end,i+1<aa.length?aa[i+1].index:s.length);
+  const before=Object.entries(roles).filter(([k,v])=>new RegExp('(?:^|\\s)(?:'+v+')(?:\\s+(?:به مبلغ|به قیمت|به ارزش|مبلغ|قیمت|به))?\\s*[:：]?\\s*
+ const st=h?.state?.(),protectedNames=[...(st?.people||[]),...(st?.products||[])].map(x=>x.name||'');
+ const n=normalize(raw,protectedNames),s=n.text;
+ if(ctx.mathDebt&&/^(لغو|پایان محاسبه|لغو محاسبه|محاسبه جدید)$/.test(s))return result('محاسبه فرضی پایان یافت.');
+ if(ctx.mathDebt&&/^(جدول|جدول اقساط|جزییات|جزئیات|محاسبات|دوباره محاسبه کن)$/.test(s))return renderDebt(ctx.mathDebt);
+ if(ctx.mathDebt&&Number.isInteger(ctx.pendingRate)&&/^(?:دوره اول|دوره دوم|دوره اقساط|اقساط|دوره تاخیر|تاخیر|دوره بدون پرداخت|بدون پرداخت|بعد از شروع پرداخت)$/.test(s)){
+ const d={...ctx.mathDebt};if(/اول|تاخیر|بدون پرداخت/.test(s))d.delayBp=ctx.pendingRate;else d.payBp=ctx.pendingRate;return renderDebt(d,n.fixes);
+ }
+ const d=parseDebt(s);
+ if(d){if(d.error)return ask(d.error);d.inputUnit=unitOf(s)||C.unit;return renderDebt(d,n.fixes);}
+ if(ctx.mathDebt&&/قسط|پرداخت ماهانه|ماهیانه|ماهانه|درصد|سود|تاخیر|تأخیر|اول ماه|ابتدای ماه|پایان ماه|اخر ماه|بدهی اولیه/.test(s)&&!/امروز چقدر|فروش|خرید|گزارش|موجودی|مانده حساب/.test(s)&&!(amounts(s).length===1&&rates(s).length===1&&!/قسط|تاخیر|تأخیر|دوره/.test(s))){
+  const a=amend(s,ctx.mathDebt);if(a?.ambiguous)return ask('این نرخ مربوط به دوره تأخیر است یا دوره اقساط؟',{...ctx,pendingRate:rates(s)[0]?.bp});if(a)return renderDebt(a,n.fixes);
+ }
+ let expr=s.replace(/^(?:حساب کن|محاسبه کن|نتیجه|حاصل|چقدر میشه|چقدر می شود)\s*:?\s*/,'').replace(/[؟?]$/,'').replace(/\s*(?:چقدر می شود|چقدر میشه|چند می شود|چقدر|مساوی است)\s*$/,'').replace(/=$/,'').replace(/به علاوه|بعلاوه|جمع با|به اضافه/g,'+').replace(/منهای|منها/g,'-').replace(/ضرب در/g,'*').replace(/تقسیم بر/g,'/').replace(/به توان/g,'^');
+ if(/^[\d\s.+\-*/^()%٪×÷xX−–]+$/.test(expr)&&/[+\-*/^%٪×÷xX−–]/.test(expr)){try{const a=expression(expr);return result('نتیجه: '+display(a),{},['عبارت: '+C.toFa(expr),a[1]===1n?'محاسبه صحیح و دقیق.':'مقدار دقیق: '+C.toFa(a[0].toString())+' / '+C.toFa(a[1].toString())],{kind:'arithmetic',exact:[String(a[0]),String(a[1])]});}catch(e){return ask(e.message);}}
+ const as=amounts(s),rs=rates(s),u=unitOf(s);
+ if(as.length===2&&!rs.length&&/چند درصد|درصد تغییر|درصد رشد|درصد کاهش|درصد سود|حاشیه سود|درصد زیان/.test(s)&&!/ماه|قسط|دریافت|پرداخت ماهانه|مانده حساب|امروز|دیروز/.test(s)){
+  if(!u&&as.some(a=>!unitOf(a.raw)))return ask('واحد مبالغ را مشخص کنید.');
+  const a=amountOf(as[0].raw,u||C.unit),b=amountOf(as[1].raw,u||C.unit);
+  if(!Number.isSafeInteger(a)||!Number.isSafeInteger(b)||a<=0)return ask('مبلغ مبنا باید مثبت و معتبر باشد.');
+  let kind='درصد تغییر',base=a;
+  if(/خرید|بهای تمام شده|قیمت تمام شده|قیمت اولیه/.test(s)&&/فروش|قیمت نهایی/.test(s)){
+   if(!/خرید|بهای تمام شده|قیمت تمام شده|قیمت اولیه/.test(s.slice(0,as[0].index)))return ask('ابتدا قیمت خرید و سپس قیمت فروش را با عنوان مشخص وارد کنید.');
+   kind=/حاشیه سود/.test(s)?'حاشیه سود فروش':'بازده روی بهای خرید';if(kind==='حاشیه سود فروش')base=b;
+  }else if(!/از .* به |ابتدا|قبلا|مبنا|قیمت اولیه/.test(s))return ask('کدام مبلغ مبنا و کدام مبلغ نهایی است؟ مثال: از ۱۰۰ میلیون تومان به ۱۲۰ میلیون تومان.');
+  if(base<=0)return ask('مبنای درصد باید مثبت باشد.');
+  const frac=rational(BigInt(b-a)*100n,BigInt(base));return result(kind+': '+display(frac)+'٪',{},['مبلغ اولیه: '+money(a),'مبلغ نهایی: '+money(b),'تفاوت مبلغ: '+money(b-a),'مبنای درصد: '+money(base)],{kind:'percent-change',exact:[String(frac[0]),String(frac[1])],value:b-a});
+ }
+ if(as.length===1&&rs.length===1&&/چقدر|محاسبه|چند|حاصل|اضافه|کم کن/.test(s)&&!/ماه|قسط|از حساب|موجودی|فروش امروز|خرید امروز/.test(s)){
+  const a=amountOf(as[0].raw,u||C.unit),bp=rs[0].bp;if(!Number.isSafeInteger(a)||bp===null)return ask('مبلغ یا درصد روشن نیست.');
+  const part=round(BigInt(a)*BigInt(bp),B);let total=part,kind='درصد از مبلغ';
+  if(/اضافه|افزایش|بیشتر/.test(s)){total=BigInt(a)+part;kind='مبلغ با افزایش درصدی';}else if(/کم کن|کسر|تخفیف|کاهش/.test(s)){total=BigInt(a)-part;kind='مبلغ پس از کاهش درصدی';}
+  if(abs(total)>MAX)return ask('مبلغ از محدوده امن بیشتر است.');
+  return result(kind+': '+money(total),{},['مبلغ مبنا: '+money(a),'درصد: '+C.toFa(String(bp/100))+'٪','مبلغ درصد: '+money(part)],{kind:'percent',value:Number(total)});
+ }
+ return null;
+}
+const api={normalize,expression,display,parseDebt,schedule,tryMath,isWordProblem};root.FQMath=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof window!=='undefined'?window:globalThis);
+).test(left)).map(([k])=>k);
+  const after=Object.entries(roles).filter(([k,v])=>new RegExp('^\\s*(?:'+v+')(?=\\s|[،.؟؛]|$)').test(right)).map(([k])=>k);
+  const possible=before.length?before:after;
+  if(possible.length!==1)return fail();
+  assigned.push({...a,role:possible[0]});
+ }
+ if(assigned.filter(a=>a.role==='buy').length!==1||assigned.filter(a=>a.role==='sell').length!==1)return fail();
+ const scaled=assigned.some(a=>/میلیون|میلیارد|هزار/.test(a.raw));
+ const shorthand=!scaled&&assigned.every(a=>/^\d+(?:\.\d+)?\s*تومان$/.test(a.raw)&&parseFloat(a.raw)<10000)&&/گوشی|ایفون|موبایل/.test(s)&&/تومن|تومون/.test(String(raw));
+ if(scaled&&assigned.some(a=>!/میلیون|میلیارد|هزار/.test(a.raw)&&/^\d+(?:\.\d+)?\s*تومان$/.test(a.raw)&&parseFloat(a.raw)<10000))return fail();
+ const u=unitOf(s);if(!u&&assigned.some(a=>!unitOf(a.raw)))return fail();
+ const v={buy:0,sell:0,cost:0,discount:0};
+ for(const a of assigned){const value=safeAmount({...a,raw:shorthand?a.raw.replace(/تومان$/,'میلیون تومان'):a.raw},u);if(value===null)return fail();v[a.role]+=value;}
+ if(!Object.values(v).every(x=>Number.isSafeInteger(x)&&BigInt(x)<=MAX)||v.buy<=0||v.discount>v.sell)return fail();
+ const sale=v.sell-v.discount,net=sale-v.buy-v.cost,totalCost=v.buy+v.cost;
+ if(!Number.isSafeInteger(totalCost)||BigInt(totalCost)>MAX||BigInt(Math.abs(net))>MAX)return fail();
+ const base=/حاشیه سود/.test(s)?sale:/کل هزینه|کل سرمایه|نسبت به بهای تمام شده/.test(s)?totalCost:v.buy;if(base<=0)return fail();
+ const ratio=rational(BigInt(net)*100n,BigInt(base)),pct=display(rational(round(BigInt(net)*10000n,BigInt(base)),100n));
+ const details=['قیمت خرید: '+money(v.buy),'فروش قبل از تخفیف: '+money(v.sell),'تخفیف: '+money(v.discount),'مبلغ فروش پس از تخفیف: '+money(sale),'هزینه جانبی: '+money(v.cost),'مبنای درصد: '+money(base)];
+ if(shorthand)details.push('فرض: در بیان محاوره‌ای قیمت گوشی، «تومن» به معنی میلیون تومان است؛ اگر منظور تومان واقعی است، همه مبالغ را بر یک میلیون تقسیم کنید. درصد ثابت است.');
+ return result((net<0?'زیان خالص: ':'سود خالص: ')+money(Math.abs(net))+' — '+(net<0?'درصد زیان: ':'درصد سود: ')+pct.replace(/^-/,'')+'٪',{},details,{kind:'trade-profit',value:net,exact:ratio.map(String),...v,netSale:sale,base,shorthand});
+}
+function installmentsProblem(raw){
+ const s=problemText(raw);if(!/اقساط|قسط/.test(s)||!/پیش\s*پرداخت/.test(s)||!/ساده/.test(s)||/مرکب|روی مانده|کاهش یافته/.test(s))return null;
+ const a=amounts(s),r=rates(s),m=s.match(new RegExp('('+number+')\\s*ماه(?:ه)?(?=\\s|[،.؟؛]|$)'));
+ if(a.length!==1||r.length!==2||!m)return null;
+ const pre=r.filter(x=>/پیش\s*پرداخت\s*$/.test(s.slice(Math.max(0,x.index-25),x.index))||/^\s*پیش\s*پرداخت/.test(s.slice(x.end)));
+ const rate=r.filter(x=>/ماهانه\s*$/.test(s.slice(Math.max(0,x.index-20),x.index))||/^\s*(?:سود\s*)?ماهانه/.test(s.slice(x.end)));
+ if(pre.length!==1||rate.length!==1||pre[0]===rate[0]||pre[0].bp===null||rate[0].bp===null)return null;
+ const total=safeAmount(a[0],unitOf(s)),term=F.monthCount(m[1]),p=pre[0].bp;
+ if(!total||!term||p<0||p>10000)return ask('قیمت، درصد پیش‌پرداخت یا مدت معتبر نیست.');
+ const down=Number(round(BigInt(total)*BigInt(p),B)),principal=total-down;
+ const x=F.calculate({mode:'remaining',principal,months:term,rateBp:rate[0].bp,method:'simple'});if(!x.ok)return ask(x.error);
+ const fin=down+x.due;if(!Number.isSafeInteger(fin)||BigInt(fin)>MAX)return ask('مبلغ نهایی از محدوده امن بیشتر است.');
+ // Divide in whole selected currency units and assign the rounding remainder to final cheque.
+ const step=C.unit==='toman'?10n:1n,each=Number(round(BigInt(x.due),BigInt(term)*step)*step),last=x.due-each*(term-1);
+ return result('مجموع قیمت نهایی: '+money(fin),{},['پیش‌پرداخت: '+money(down),'اصل اقساط: '+money(principal),'سود ساده: '+money(x.interest),'هر قسط (به‌جز آخر): '+money(each),'قسط آخر: '+money(last),'مجموع اقساط: '+money(x.due)],{kind:'installment',value:x.due,final:fin,interest:x.interest,down,each,last});
+}
+function growthProblem(raw){
+ const s=problemText(raw);if(!/سرمایه/.test(s)||!/در گردش/.test(s)||!/سود خالص/.test(s)||!/هزینه ثابت/.test(s)||!/به سرمایه اضافه/.test(s))return null;
+ const a=amounts(s),r=rates(s),ms=months(s);
+ if(a.length!==2||r.length!==2||ms.length!==1||!ms[0].n||r.some(x=>x.bp===null))return ask('سرمایه اولیه، درصد گردش، درصد سود روی گردش، هزینه ماهانه و تعداد ماه‌ها را مشخص کنید.');
+ const turnover=r.find(x=>/^\s*(?:سرمایه(?: ام)?\s*)?در گردش/.test(s.slice(x.end))),margin=r.find(x=>/^\s*سود/.test(s.slice(x.end)));
+ if(!turnover||!margin||turnover===margin||!/هزینه ثابت/.test(s.slice(a[0].end,a[1].index)))return ask('کدام درصد گردش سرمایه و کدام درصد سود روی گردش است؟');
+ const start=safeAmount(a[0],unitOf(s)),cost=safeAmount(a[1],unitOf(s));if(!start||cost===null)return ask('مبالغ سرمایه و هزینه معتبر نیستند.');
+ let balance=BigInt(start);const details=['فرض: سود ماهانه روی مبلغ در گردش محاسبه و پس از کسر هزینه به سرمایه اضافه می‌شود.'];
+ for(let i=1;i<=ms[0].n;i++){if(balance<0n)return ask('سرمایه برای ادامه این سناریو کافی نیست.');const income=round(balance*BigInt(turnover.bp)*BigInt(margin.bp),B*B),profit=income-BigInt(cost);balance+=profit;if(abs(balance)>MAX)return ask('مبلغ از محدوده امن بیشتر است.');details.push('ماه '+C.toFa(i)+': سود خالص '+money(Number(profit))+'؛ سرمایه پایان ماه '+money(Number(balance)));}
+ const profit=Number(balance-BigInt(start));details.push('مجموع سود خالص: '+money(profit));return result('سرمایه نهایی: '+money(Number(balance)),{},details,{kind:'capital-growth',value:Number(balance),profit});
+}
+function balanceProblem(raw){
+ const s=problemText(raw);if(!/مانده حساب|مانده.*طلب/.test(s)||!/چک/.test(s)||!/نقد/.test(s)||!/خریدم/.test(s)||!/فروختم/.test(s))return null;
+ const a=amounts(s);if(a.length<3)return null;
+ const fail=()=>ask('برای تسویه فرضی، مبلغ فروش، نقد دریافتی، تعداد و مبلغ هر چک، تعداد چک وصول‌شده و ارزش خرید متقابل را مشخص کنید.');
+ if(a.length!==4||!/دو چک|2 چک/.test(s)||!/یکی پاس شده|یکی وصول شده/.test(s)||!/دیگری.*(?:پاس نشده|وصول نشده)/.test(s))return fail();
+ if(!/فروختم/.test(s.slice(a[0].end,a[1].index))||!/نقد/.test(s.slice(a[1].end,a[2].index))||!/خریدم/.test(s.slice(a[3].end)))return fail();
+ const u=unitOf(s),v=a.map(x=>safeAmount(x,u));if(v.some(x=>x===null))return fail();
+ const [sold,cash,cheque,bought]=v,account=sold-cash-cheque*2-bought,uncollected=account+cheque;
+ if(![account,uncollected].every(x=>Number.isSafeInteger(x)&&BigInt(Math.abs(x))<=MAX))return fail();
+ return result('مانده حساب شخص: '+money(account)+' — مجموع طلب با چک وصول‌نشده: '+money(uncollected),{},['فروش: '+money(sold),'نقد: '+money(cash),'دو چک دریافتی: '+money(cheque*2),'خرید متقابل: '+money(bought),'چک وصول‌نشده: '+money(cheque),'فرض: دریافت چک از حساب شخص کسر می‌شود؛ وصول نقدی جداگانه محاسبه می‌شود.'],{kind:'balance-scenario',value:account,uncollected});
+}
+function isWordProblem(raw){
+ const s=problemText(raw),a=amounts(s);
+ return a.length>=2&&/چقدر|چند درصد|چند قسط|محاسبه|چند ماه/.test(s)&&/خریدم|فروختم|گرفتم|دادم|سرمایه دارم|سرمایه ام|بدهکارم|طلب دارم/.test(s)&&!/گزارش|طبق ثبت|بر اساس ثبت/.test(s);
+}
+
 function tryMath(raw,ctx={},h){
+ const word=tradeProblem(raw)||installmentsProblem(raw)||growthProblem(raw)||balanceProblem(raw);if(word)return word;
  const st=h?.state?.(),protectedNames=[...(st?.people||[]),...(st?.products||[])].map(x=>x.name||'');
  const n=normalize(raw,protectedNames),s=n.text;
  if(ctx.mathDebt&&/^(لغو|پایان محاسبه|لغو محاسبه|محاسبه جدید)$/.test(s))return result('محاسبه فرضی پایان یافت.');

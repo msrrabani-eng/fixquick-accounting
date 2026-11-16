@@ -147,9 +147,20 @@ function analytics(st,q,scope,today,h,ctx,aliases,forced){
  }
  return null;
 }
+async function runMathOnly(q,ctx={},opts={}){
+ const raw=String(q||'').trim(),valid=opts.valid||(()=>true);if(!valid())throw Error('دسترسی تغییر کرده است.');
+ const x=M.tryMath(raw,ctx);if(x)return x;
+ const n=M.normalize(raw).text;
+ const local={today:opts.today?.()||C.todayISO(),allow:{money:true}};
+ if(ctx.weighted||/راس گیری|میانگین موعد|راس چک/.test(n)){const w=C.chequeAssistant?.weightedAsk(raw,ctx,local);if(w)return w;}
+ if(ctx.finance||F.intent(raw)){const z=F.ask(raw,ctx,local);if(z)return z;}
+ return {text:'در حالت حل مسئله به اطلاعات حسابداری دسترسی ندارم. اگر مسئله محاسباتی است، مبالغ، واحد و رابطه میان آن‌ها را روشن‌تر بنویسید. برای گزارش واقعی، دسترسی به اطلاعات برنامه را روشن کنید.',ctx:{},details:[],actions:[],source:'حل مسئله آفلاین؛ بدون خواندن انبار یا اسناد',data:{kind:'math-clarify'}};
+}
 async function run(q,ctx={},h){
  if(!h.valid())throw Error('دسترسی تغییر کرده است.');
  let raw=String(q||'').trim(),n=norm(raw);const today=h.today();
+ // Explicit new word problems take precedence over stale report context.
+ if(M?.isWordProblem(raw)){const math=M.tryMath(raw,{},h);if(!h.valid())throw Error('دسترسی تغییر کرده است.');if(math)return math;return runMathOnly(raw,{}, {valid:h.valid,today:h.today});}
  // Original calculator conversations retain priority, and all new functions are optional to older callers.
  if(ctx.finance||ctx.weighted)return B.runSmart(raw,ctx,h);
  if(M&&!ctx.pendingAlias&&!ctx.pending&&!/^نام مستعار/.test(n)){
@@ -253,5 +264,5 @@ async function run(q,ctx={},h){
  }
  return {...old,ctx,details:['بازه، نام یا معیار را دقیق‌تر بنویسید.','نمونه: «جمع فروش امروز»، «سود ناخالص کابل این ماه»، «گزارش مدیریت».']};
 }
-const api={run,dateScope,metricOf,resolve};root.FQAdvisor=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+const api={run,runMathOnly,dateScope,metricOf,resolve};root.FQAdvisor=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

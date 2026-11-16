@@ -29,7 +29,22 @@ for(let k=1;k<=250;k++){
  for(const t of x.rows){eq(t.opening+t.interest-t.payment,t.closing);ok(t.closing>=0);}
 }
 (async()=>{
-const st=C.emptyState();C.migrate(st);const snap=JSON.stringify(st);const h={state:()=>st,valid:()=>true,permissions:()=>({reports:true,cost:true,balances:true,money:true,warehouse:true}),today:()=>'2026-11-16',read:x=>A.structuredRead(st,x,{today:'2026-11-16',allow:{reports:true,cost:true,balances:true,money:true,warehouse:true}})};
+const st=C.emptyState();C.migrate(st);C.addProduct(st,{name:'کابل نمایشگر درصد شارژ 60 وات'});C.addProduct(st,{name:'چند راهی برق'});const snap=JSON.stringify(st);const h={state:()=>st,valid:()=>true,permissions:()=>({reports:true,cost:true,balances:true,money:true,warehouse:true}),today:()=>'2026-11-16',read:x=>A.structuredRead(st,x,{today:'2026-11-16',allow:{reports:true,cost:true,balances:true,money:true,warehouse:true}})};
+
+const bad='من یه گوشب خریدم ۲۸۰ تومن و ۳۱۵ تومن فرختم ولی ۵ تومن خرجش کردم و مشتری هم ۱۰ تومن تخفیف گرفت. چقد سود کردم و چند درص میشه نسبت به خرید؟';
+const formal='یک گوشی به قیمت ۲۴۵ میلیون تومان خریدم و ۲۸۵ میلیون تومان فروختم. ۳ میلیون هزینه رجیستری و ۲ میلیون هزینه جانبی داشتم. سود خالص من چقدر است و چند درصد سرمایه اولیه خرید گوشی سود کردم؟';
+const inst='یک گوشی ۳۲۰ میلیون تومانی را با ۵۰ درصد پیش‌پرداخت و اقساط ۶ ماهه با سود ساده ماهانه ۷ درصد می‌فروشم. مبلغ هر چک، مجموع سود و قیمت نهایی گوشی چقدر می‌شود؟';
+const grow='من یک میلیارد تومان سرمایه دارم. هر ماه ۶۰ درصد سرمایه‌ام در گردش است و روی مبلغ در گردش ۲۵ درصد سود می‌کنم. هزینه ثابت ماهانه من ۱۰۰ میلیون تومان است. اگر هر ماه سود خالص را به سرمایه اضافه کنم، پس از سه ماه چقدر سرمایه خواهم داشت و مجموع سود خالص من چقدر خواهد بود؟';
+const bal='سه ماه پیش به علی یک گوشی به ارزش ۴۰۰ میلیون تومان فروختم. ۱۲۰ میلیون نقد داد و دو چک ۸۰ میلیونی به من داد که یکی پاس شده و دیگری هنوز پاس نشده. امروز هم از علی یک گوشی به ارزش ۹۵ میلیون تومان خریدم. مانده حساب تسویه‌نشده علی و مجموع طلب من با احتساب چک پاس‌نشده چقدر است؟';
+for(const [s,k,v] of [[bad,'trade-profit',200000000],[formal,'trade-profit',350000000],[inst,'installment',2272000000],[grow,'capital-growth',11736250000],[bal,'balance-scenario',250000000]]){
+ const got=await O.runMathOnly(s,{}, {today:()=> '2026-11-16'});eq(got.data.kind,k);eq(got.data.value,v);
+ const routed=await O.run(s,{},h);eq(routed.data.kind,k);eq(routed.data.value,v);
+}
+eq(M.tryMath(bad).data.exact.join('/'),'50/7');
+eq(M.tryMath(inst).data.final,3872000000);
+eq(M.tryMath(bal).data.uncollected,1050000000);
+eq((await O.runMathOnly('موجودی کابل و مانده حساب علی چقدر است؟',{}, {state:()=>{throw Error('database read');},today:()=> '2026-11-16'})).data.kind,'math-clarify');
+
 eq((await O.run(q,{},h)).data.total,r.data.total);eq(JSON.stringify(st),snap);
 const code=fs.readFileSync('www/math-assistant.js','utf8');assert.doesNotMatch(code,/\beval\s*\(|new Function|fetch\s*\(|WebSocket|XMLHttpRequest|https?:\/\//);n++;
 for(const path of ['www/index.html','www/sw.js'])ok(fs.readFileSync(path,'utf8').includes('math-assistant.js'));
