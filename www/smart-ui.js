@@ -1,6 +1,6 @@
 /* Read-only accounting conversation and review dialogs. */
 'use strict';
-let smartTalk=[],smartContext={},smartTalkUser=null,smartBusy=false,smartJob=0,smartDraft='',smartExpanded=false,smartExporting=false;
+let smartTalk=[],smartContext={},smartTalkUser=null,smartBusy=false,smartJob=0,smartDraft='',smartExpanded=false,smartExporting=false,smartEditorDispose=null;
 function smartCurrentUser(){try{return JSON.stringify([String(curName()),isAdmin(),...['money','balances','reports','cost','warehouse','purchase'].map(k=>can(k)),routeAllowed('products')]);}catch(_){return null;}}
 function smartResetForUser(){const u=smartCurrentUser();if(smartTalkUser!==u){smartJob++;smartBusy=false;smartTalkUser=u;smartTalk=[];smartContext={};smartDraft='';smartExpanded=false;}}
 function smartAliasKey(){return 'fq_offline_aliases_v1:'+encodeURIComponent(String(curName()||''));}
@@ -17,9 +17,9 @@ function smartMathTable(rows,unit=Core.unit){
  return '<details class="fq-math-schedule" open><summary>جدول کامل محاسبات ('+fa(rows.length)+' ردیف)</summary><div class="fq-math-scroll"><table dir="rtl"><thead><tr><th>مرحله</th><th>مانده اول</th><th>سود</th><th>پرداخت</th><th>مانده آخر</th></tr></thead><tbody>'+rows.map(r=>'<tr><th>'+ (r.phase==='delay'?'تأخیر ':'قسط ')+fa(r.month)+'</th><td>'+cell(r.opening)+'</td><td>'+cell(r.interest)+'</td><td>'+cell(r.payment)+'</td><td>'+cell(r.closing)+'</td></tr>').join('')+'</tbody></table></div><small class="hint">واحد مبالغ: '+esc(Core.unitName(unit))+'</small></details>';
 }
 function smartStamp(m){return FQChatFormat.stamp(m.at,Core);}
-function smartAccess(owner){return owner===smartCurrentUser()&&owner===smartTalkUser&&location.hash.split('?')[0]==='#/assistant';}
+function smartAccess(owner){return !!owner&&owner===smartCurrentUser()&&owner===smartTalkUser&&location.hash.split('?')[0]==='#/assistant';}
 async function smartCopy(button,index){
- const owner=smartCurrentUser(),m=smartTalk[index];if(!m||!smartAccess(owner))return;
+ const owner=smartCurrentUser(),m=smartTalk[index];if(!m||!owner||!smartAccess(owner))return;
  const text=FQChatFormat.copyText(m,Core);let ok=false;
  try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);ok=true;}}catch(_){}
  if(!ok&&smartAccess(owner)){
@@ -42,16 +42,18 @@ async function smartPdf(button,index){
  finally{smartExporting=false;if(button.isConnected){button.disabled=false;button.textContent=old;}}
 }
 function smartEditorMount(){
+ smartEditorDispose?.();smartEditorDispose=null;
  const chat=$('.ui20-chat'),box=$('#fq-chat-input'),toggle=$('#fq-chat-expand'),scroll=$('.ui20-scroll');if(!chat||!box||!toggle)return;
- const sync=()=>{const view=chat.clientHeight||window.visualViewport?.height||window.innerHeight;chat.classList.toggle('fq-chat-expanded',smartExpanded);toggle.textContent=smartExpanded?'کوچک کردن':'بزرگ کردن';toggle.setAttribute('aria-expanded',String(smartExpanded));const max=FQChatFormat.pageLimit(view,smartExpanded);box.style.maxHeight=max+'px';box.style.height='auto';box.style.height=(smartExpanded?max:Math.min(max,Math.max(52,box.scrollHeight)))+'px';box.style.overflowY=box.scrollHeight>box.clientHeight+2?'auto':'hidden';};
+ let normalHeight=window.visualViewport?.height||window.innerHeight,keyboardReduced=false;
+ const sync=()=>{const view=chat.clientHeight||window.visualViewport?.height||window.innerHeight;chat.classList.toggle('fq-chat-expanded',smartExpanded);toggle.textContent=smartExpanded?'کوچک کردن':'بزرگ کردن';toggle.setAttribute('aria-expanded',String(smartExpanded));const max=FQChatFormat.pageLimit(Math.max(80,view-($('#fq-chat-input')?.parentElement?.querySelector('.fq-chat-compose-tools')?.offsetHeight||30)),smartExpanded);box.style.maxHeight=max+'px';box.style.height='auto';box.style.height=(smartExpanded?max:Math.min(max,Math.max(52,box.scrollHeight)))+'px';box.style.overflowY=box.scrollHeight>box.clientHeight+2?'auto':'hidden';};
  box.value=smartDraft;box.addEventListener('input',()=>{smartDraft=box.value;sync();});box.addEventListener('focus',()=>{document.body.classList.add('fq-chat-typing');requestAnimationFrame(sync);});box.addEventListener('blur',()=>{document.body.classList.remove('fq-chat-typing');requestAnimationFrame(sync);});
  toggle.onclick=()=>{smartExpanded=!smartExpanded;sync();box.focus({preventScroll:true});};
  const keyboard=$('#fq-chat-keyboard');keyboard.onclick=()=>box.blur();
  const observer=typeof ResizeObserver==='function'?new ResizeObserver(()=>{if(chat.isConnected)sync();else observer.disconnect();}):null;observer?.observe(chat);
  // Visual viewport on Android may resize separately from CSS layout.
- const viewport=()=>{if(!chat.isConnected){window.visualViewport?.removeEventListener('resize',viewport);window.removeEventListener('resize',viewport);return;}const v=window.visualViewport;const typing=document.activeElement===box;if(typing&&v)document.body.style.setProperty('--fq-chat-view',Math.round(v.height)+'px');else document.body.style.removeProperty('--fq-chat-view');sync();};
+ const viewport=()=>{if(!chat.isConnected){smartEditorDispose?.();return;}const v=window.visualViewport,h=v?.height||window.innerHeight,typing=document.activeElement===box;if(!typing){normalHeight=h;keyboardReduced=false;}else{normalHeight=Math.max(normalHeight,h);const reduced=normalHeight-h>90;if(keyboardReduced&&!reduced){keyboardReduced=false;box.blur();return;}keyboardReduced=reduced;}if(typing&&v)document.body.style.setProperty('--fq-chat-view',Math.round(h)+'px');else document.body.style.removeProperty('--fq-chat-view');sync();};
  window.visualViewport?.addEventListener('resize',viewport);window.addEventListener('resize',viewport);box.addEventListener('focus',viewport);box.addEventListener('blur',viewport);
- sync();if(scroll&&smartTalk.length)scroll.scrollTop=scroll.scrollHeight;
+ smartEditorDispose=()=>{observer?.disconnect();window.visualViewport?.removeEventListener('resize',viewport);window.removeEventListener('resize',viewport);};sync();
 }
 function pageSmartAssistant(){
  smartResetForUser();
@@ -59,15 +61,15 @@ function pageSmartAssistant(){
  const history=smartTalk.length?smartTalk.map((m,i)=>'<article class="fq-msg '+(m.role==='user'?'fq-user':'fq-bot')+'"><div class="fq-chat-meta"><b>'+(m.role==='user'?'شما':'دستیار حسابداری')+'</b><time datetime="'+esc(new Date(m.at).toISOString())+'">'+esc(smartStamp(m))+'</time></div><div class="fq-chat-text">'+esc(m.text)+'</div>'+(m.source?'<small class="hint">'+esc(m.source)+'</small>':'')+(m.details?.length?'<ul>'+m.details.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>':'')+(m.unit&&m.unit!==Core.unit?smartMathTable(m.rows,m.unit):smartMathTable(m.rows))+(m.actions?.length?'<div class="chips wrap">'+m.actions.map(x=>'<button type="button" class="chip" data-act="go" data-h="'+esc(x.route)+'">'+esc(x.label)+'</button>').join('')+'</div>':'')+'<div class="fq-chat-actions"><button type="button" class="fq-chat-tool" data-chat-copy="'+i+'">کپی</button>'+(m.role==='assistant'?'<button type="button" class="fq-chat-tool" data-chat-pdf="'+i+'">PDF پاسخ</button>':'')+'</div></article>').join(''):'<div class="hint center">سؤال خود را درباره اطلاعات ثبت‌شده بپرسید. پاسخ‌ها از موتور حسابداری محاسبه می‌شوند.</div>';
  const html='<section class="ui20-chat"><div class="fq-chat-top"><div class="ui2-chat-head"><div class="ch">'+ico('chat')+'دستیار آفلاین</div><div class="fq-chat-top-actions"><button type="button" class="fq-chat-tool" id="fq-chat-pdf"'+(smartTalk.length?'':' disabled')+'>'+ico('file')+' PDF گفتگو</button><button type="button" class="fq-chat-tool" id="fq-chat-reset">'+ico('plus')+' گفت‌وگوی جدید</button></div></div></div><div class="ui20-scroll">'+
  '<details class="ui2-chat-intro"><summary>راهنمای دستیار · آفلاین</summary><p class="hint">پرسش آزاد درباره فروش، سود، کالا، اشخاص و سررسیدها. هیچ ثبت مالی تغییر نمی‌کند. برای یادگیری اصطلاح، «نام مستعار کالا ۱۷ مکس = نام کامل کالا» را وارد و سپس تأیید کنید.</p></details>'+
- '<div id="fq-chat-history" class="fq-chat-history" aria-live="polite">'+history+'</div>'+
+ '<div id="fq-chat-history" class="fq-chat-history" aria-live="polite">'+history+(smartBusy?'<div class="fq-chat-progress" role="status">در حال محاسبه آفلاین…</div>':'')+'</div>'+
  (smartTalk.length?'':'<div class="card fq-advisor-overview" id="fq-advisor-overview"><div class="ch">وضعیت هوشمند کسب‌وکار</div><div id="fq-advisor-alerts" class="hint" aria-live="polite">در حال بررسی ثبت‌های محلی…</div><button type="button" class="btn ghost" data-act="fqChatExample" data-q="گزارش مدیریت">گزارش کامل مدیریت</button></div><details class="ui20-examples"><summary>نمونه سؤال‌ها</summary><div class="chips wrap ui2-chat-examples">'+examples.map(x=>'<button type="button" class="chip" data-act="fqChatExample" data-q="'+esc(x)+'">'+esc(x)+'</button>').join('')+'</div></details>')+'</div>'+
  '<form id="fq-chat-form" class="card ui2-chat-compose"><div class="fq-chat-input-wrap"><div class="fq-chat-compose-tools"><button type="button" class="fq-chat-tool" id="fq-chat-expand" aria-expanded="false">بزرگ کردن</button><button type="button" class="fq-chat-tool" id="fq-chat-keyboard">'+ico('keyboard')+' بستن صفحه‌کلید</button></div><textarea id="fq-chat-input" class="inp" rows="1" maxlength="4000" aria-label="سؤال جدید" placeholder="مسئله مالی، ریاضی یا سؤال حسابداری خود را بنویسید…" required></textarea></div><button class="btn blue" type="submit" aria-label="ارسال سؤال"'+(smartBusy?' disabled':'')+'>'+ico('send')+'</button></form></section>';
  return {title:'دستیار حسابداری',html,back:'#/home',mount:()=>{
   $('#fq-chat-form').onsubmit=e=>{e.preventDefault();const box=$('#fq-chat-input');const value=box.value;if(!value.trim()||smartBusy)return;box.blur();smartAskQuestion(value);};
-  $('#fq-chat-reset').onclick=()=>{smartJob++;smartBusy=false;smartTalk=[];smartContext={};smartDraft='';smartExpanded=false;document.body.classList.remove('fq-chat-typing');render();};
+  $('#fq-chat-reset').onclick=async()=>{const owner=smartCurrentUser();if((smartTalk.length||smartDraft.trim())&&!await confirmBox('گفت‌وگوی فعلی و متن در حال تایپ پاک می‌شوند. ابتدا در صورت نیاز PDF بگیرید.','شروع گفت‌وگوی جدید',true))return;if(!smartAccess(owner))return;smartJob++;smartBusy=false;smartTalk=[];smartContext={};smartDraft='';smartExpanded=false;document.body.classList.remove('fq-chat-typing');render();};
   $('#fq-chat-pdf').onclick=e=>smartPdf(e.currentTarget);
   document.querySelectorAll('[data-chat-copy]').forEach(b=>b.onclick=()=>smartCopy(b,+b.dataset.chatCopy));document.querySelectorAll('[data-chat-pdf]').forEach(b=>b.onclick=()=>smartPdf(b,+b.dataset.chatPdf));smartEditorMount();
-  const b=$('.ui20-scroll');if(b&&smartTalk.length)b.scrollTop=b.scrollHeight;
+  const b=$('.ui20-scroll'),last=b?.querySelector('.fq-msg:last-child');if(b&&last){b.scrollTop+=last.getBoundingClientRect().top-b.getBoundingClientRect().top-4;}
   const alerts=$('#fq-advisor-alerts');if(alerts&&typeof FQAdvisor!=='undefined'){const owner=smartCurrentUser(),valid=()=>alerts.isConnected&&owner===smartCurrentUser()&&location.hash.split('?')[0]==='#/assistant';setTimeout(async()=>{if(!valid())return;try{const r=await FQAdvisor.run('گزارش مدیریت',{},smartHandlers(valid));if(valid())alerts.innerHTML=r.details?.length?r.details.slice(0,6).map(x=>'<div class="fq-advisor-line">'+esc(x)+'</div>').join(''):esc(r.text);}catch(_){if(valid())alerts.textContent='گزارش فعلاً قابل محاسبه نیست.';}},50);}
  }};
 }
@@ -77,13 +79,13 @@ async function smartAskQuestion(text){
  const opts=()=>({today:today(),allow:permissions()});
  const context=smartContext,job=++smartJob,auth=JSON.stringify(permissions()),valid=()=>job===smartJob&&owner===smartCurrentUser()&&location.hash.split('?')[0]==='#/assistant'&&JSON.stringify(permissions())===auth;
  smartBusy=true;smartDraft='';smartExpanded=false;document.body.classList.remove('fq-chat-typing');document.body.style.removeProperty('--fq-chat-view');const unit=Core.unit;smartTalk.push({role:'user',text:q,at:Date.now(),unit});let out;render();
- try{const h=smartHandlers(valid);out=typeof FQAdvisor!=='undefined'?await FQAdvisor.run(q,context,h):await FQReports.runSmart(q,context,h);}
+ try{await new Promise(res=>setTimeout(res,0));if(!valid())return;const h=smartHandlers(valid);out=typeof FQAdvisor!=='undefined'?await FQAdvisor.run(q,context,h):await FQReports.runSmart(q,context,h);}
  catch(e){out={text:'گزارش کامل نشد؛ هیچ مبلغ حدسی تولید نشد.',ctx:context,details:[String(e?.message||e)],actions:[],source:'خطای گزارش'};}
  finally{if(job===smartJob)smartBusy=false;}
  if(!valid())return;
  smartContext=out.ctx||{};smartTalk.push({role:'assistant',text:out.text,details:out.details,actions:out.actions,source:out.source||'دستیار حسابداری',rows:out.rows,at:Date.now(),unit});render();
 }
-if(typeof window!=='undefined')window.addEventListener('hashchange',()=>{if(location.hash.split('?')[0]!=='#/assistant'){smartJob++;smartBusy=false;smartTalk=[];smartContext={};smartDraft='';smartExpanded=false;document.body.classList.remove('fq-chat-typing');document.body.style.removeProperty('--fq-chat-view');}});
+if(typeof window!=='undefined')window.addEventListener('hashchange',()=>{if(location.hash.split('?')[0]!=='#/assistant'){smartEditorDispose?.();smartEditorDispose=null;smartJob++;smartBusy=false;smartTalk=[];smartContext={};smartDraft='';smartExpanded=false;document.body.classList.remove('fq-chat-typing');document.body.style.removeProperty('--fq-chat-view');}});
 
 async function smartGuardConfirm(kind, candidate, editId){
   const issues=Core.smartGuard.preflight(S,kind,candidate,{editingId:editId||null,today:today()});

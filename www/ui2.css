@@ -114,3 +114,5 @@ body.fq-chat-typing:has(#main[data-page=assistant]) .nav{display:none}
 body.fq-chat-typing:has(#main[data-page=assistant]) .app{height:var(--fq-chat-view,100dvh);min-height:0;max-height:var(--fq-chat-view,100dvh)}
 #main[data-page=assistant]{padding:8px 8px 8px!important;min-height:0}
 @media(max-height:430px){body.fq-chat-typing #main[data-page=assistant] .fq-chat-top{display:none}.ui20-chat{grid-template-rows:auto minmax(0,1fr) auto}body.fq-chat-typing #main[data-page=assistant] .ui20-chat:not(.fq-chat-expanded){grid-template-rows:minmax(0,1fr) auto}}
+
+.fq-chat-progress{align-self:stretch;padding:10px 12px;font-size:calc(12px * var(--fs,1));color:var(--mut);background:var(--soft);border-radius:9px}.fq-chat-text{user-select:text;-webkit-user-select:text}.ui20-chat .fq-chat-history{min-width:0}.fq-chat-expanded .fq-chat-input-wrap{align-self:stretch;display:flex;flex-direction:column}.fq-chat-expanded .fq-chat-input-wrap textarea{flex:1 1 auto;min-height:0}

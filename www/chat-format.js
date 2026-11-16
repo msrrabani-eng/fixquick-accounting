@@ -1,16 +1,16 @@
 /* Offline chat formatting and PDF generation. All input is a frozen conversation snapshot. */
 (function(root){'use strict';
-function stamp(at,core){const d=new Date(at);if(!Number.isFinite(d.getTime()))return '';return core.fmtDate(core.todayISO(d))+' · '+core.toFa(String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'));}
+function stamp(at,core){const d=new Date(at);if(at==null||!Number.isFinite(d.getTime()))return '';return core.fmtDate(core.todayISO(d))+' · '+core.toFa(String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'));}
 function amount(n,unit,core){if(!Number.isSafeInteger(n))return '—';const a=unit==='toman'?Math.trunc(n/10):n,d=unit==='toman'?Math.abs(n%10):0;return core.toFa((a===0&&n<0?'-':'')+core.group(a)+(d?'.'+d:''));}
 function tableRow(r,unit,core){return [(r.phase==='delay'?'تأخیر ':'قسط ')+core.toFa(r.month),...['opening','interest','payment','closing'].map(k=>amount(r[k],unit,core))];}
 const headers=['مرحله','مانده اول','سود','پرداخت','مانده آخر'];
-function copyText(m,core){const unit=m.unit||'rial';return [String(m.text||''),m.source||'',...(m.details||[]).map(t=>'• '+t),...(m.rows?.length?['جدول محاسبات ('+core.unitName(unit)+')',headers.join(' | '),...m.rows.map(r=>tableRow(r,unit,core).join(' | '))]:[])].filter(Boolean).join('\n');}
+function copyText(m,core){const unit=m.unit||'rial';return [String(m.text||''),stamp(m.at,core),m.source||'',...(m.details||[]).map(t=>'• '+t),...(m.rows?.length?['جدول محاسبات ('+core.unitName(unit)+')',headers.join(' | '),...m.rows.map(r=>tableRow(r,unit,core).join(' | '))]:[])].filter(Boolean).join('\n');}
 // Wrap both ordinary Persian paragraphs and long unbroken identifiers without losing characters.
 function wrap(ctx,text,width){const lines=[];for(const para of String(text).split('\n')){let line='';for(const word of para.split(/\s+/).filter(Boolean)){const next=line?line+' '+word:word;if(ctx.measureText(next).width<=width){line=next;continue;}if(line){lines.push(line);line='';}for(const ch of word){if(line&&ctx.measureText(line+ch).width>width){lines.push(line);line='';}line+=ch;}}lines.push(line);}return lines;}
 function pageLimit(view,expanded){const h=Math.max(100,Number(view)||600);return expanded?Math.max(54,h-66):Math.max(54,Math.min(300,Math.floor(h*.52),h-76));}
 async function drawPdf(messages,env){
  const {core,createCanvas,encode,logo,valid}=env,W=1240,H=1754,M=70,R=W-M,LOW=H-105,BLUE='#1d4ed8',INK='#111827',MUT='#64748b',LINE='#d6dce4',FONT='Vazirmatn, Tahoma, "Noto Sans Arabic", "Noto Naskh Arabic", Arial, sans-serif';
- const imgs=[];let cv,c,y;
+ if(!Array.isArray(messages)||!messages.length)throw Error('گفت‌وگو خالی است.');if(!valid())throw Error('دسترسی گفتگو تغییر کرد.');const imgs=[];let cv,c,y;
  const font=(n,b=400)=>{c.font=b+' '+n+'px '+FONT;};
  const txt=(s,x,yy,color=INK,align='right')=>{c.textAlign=align;c.fillStyle=color;c.fillText(String(s),x,yy);};
  const flush=()=>{if(!cv)return;if(!valid())throw Error('دسترسی گفتگو تغییر کرد.');font(23);txt('حسابداری فیکس کوییک • صفحه '+core.toFa(imgs.length+1),W/2,H-47,MUT,'center');imgs.push({jpg:encode(cv),w:W,h:H});cv.width=1;cv.height=1;cv=null;};
