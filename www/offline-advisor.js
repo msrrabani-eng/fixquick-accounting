@@ -66,7 +66,7 @@ function resultFor(req,h,ctx){
 }
 const okEntity=(kind,x)=>kind==='person'?{label:'حساب '+x.name,route:'#/person/'+x.id}:{label:'مشاهده انبار',route:'#/products'};
 function analysisComparison(st,q,s,today,h,ctx){
- const metrics=metricOf(q),m=metrics.length===1?metrics[0]:ctx.lastReport?.metric;
+ const metrics=metricOf(q),m=metrics.length===1?metrics[0]:ctx.lastReport?.metric;if(metrics.length>1)return clarify('برای مقایسه یک معیار مالی مشخص کنید.',ctx);
  if(!['sales','purchases','profit','expense','receipts','payments','sale-count','purchase-count','invoice-count'].includes(m))return clarify('برای مقایسه معیار را مشخص کنید: مبلغ فروش، خرید، سود، هزینه یا تعداد فاکتور.',ctx);
  if(ctx.lastReport&&ctx.lastReport.mode!=='total'&&!metrics.length)return clarify('مقایسه همین شخص/کالا یا کل کسب‌وکار؟',ctx);
  const target=rangeOf(s,today,st),past=target&&previous(s,target,today);if(!target||!past)return clarify('دو بازه قابل مقایسه را مشخص کنید.',ctx);
@@ -80,7 +80,7 @@ function analysisComparison(st,q,s,today,h,ctx){
  if(change!==null)details.push('درصد تغییر نسبت به دوره مبنا: '+pct(change));else details.push('درصد تغییر به علت مبنای صفر یا منفی قابل تفسیر نیست.');
  if(/چرا|علت|دلیل/.test(q)&&m==='sales'){
   const sum=r=>{const rows=st.invoices.filter(i=>i.date>=r.from&&i.date<=r.to&&i.type==='sale');return {count:rows.length,gross:rows.reduce((n,i)=>n+CoreInvoice(i),0)};};
-  const a1=sum(target),b1=sum(past);details.push('تعداد فاکتور فروش: '+C.toFa(b1.count)+' ← '+C.toFa(a1.count),'میانگین مبلغ فاکتور فروش (بدون مالیات، پیش از کسر برگشتی‌های مستقل): '+money(b1.count?b1.gross/b1.count:0)+' ← '+money(a1.count?a1.gross/a1.count:0),'این عوامل تغییر عددی را نشان می‌دهند؛ علت بیرونی افت فروش از اطلاعات دفتر قابل اثبات نیست.');
+  const a1=sum(target),b1=sum(past);details.push(delta>=0?'بر اساس این دو بازه، افت فروش مشاهده نمی‌شود.':'فروش در بازه اول کاهش یافته است.');details.push('تعداد فاکتور فروش: '+C.toFa(b1.count)+' ← '+C.toFa(a1.count),'میانگین مبلغ فاکتور فروش (بدون مالیات، پیش از کسر برگشتی‌های مستقل): '+money(b1.count?b1.gross/b1.count:0)+' ← '+money(a1.count?a1.gross/a1.count:0),'این عوامل تغییر عددی را نشان می‌دهند؛ علت بیرونی افت فروش از اطلاعات دفتر قابل اثبات نیست.');
  }
  return out(label[m]+' در دوره اول '+fmt(a)+' و دوره مقایسه '+fmt(b)+' است.',{lastReport:p1,comparison:{metric:m,a,b,range:target,previous:past}},details,reportLink,{kind:'comparison',metric:m,value:a,previous:b,delta,change});
 }
@@ -93,7 +93,7 @@ function analytics(st,q,scope,today,h,ctx,aliases,forced){
   const details=[];if(can('reports','cost')){const r=C.report(st,C.periodRange('mtd',today).from,today);details.push('فروش ماه تا امروز: '+money(r.revenue),'سود خالص ماه: '+money(r.net));if(r.revenue>0)details.push('حاشیه سود خالص: '+pct(100*r.net/r.revenue));}
   if(can('balances')){const b=C.receivablePayable(st);details.push('مطالبات: '+money(b.receivable),'بدهی: '+money(b.payable));}
   if(can('warehouse','reports','cost')){const s=C.stockInsights(st,today);details.push('سرمایه راکد: '+money(s.staleValue)+' در '+C.toFa(s.stale.length)+' کالا','نیازمند سفارش: '+C.toFa(s.reorder.length)+' کالا');}
-  if(can('money','reports')){const x=h.read({metric:'cash',mode:'total',period:'current'}),y=h.read({metric:'cheques',mode:'total',period:'until',days:7,scope:'open',direction:'all',kindFilter:'both'});if(numeric(x?.data?.value)&&numeric(y?.data?.paid)&&numeric(y?.data?.received)){const net=x.data.value-y.data.paid;details.push('تعهدات باز تا ۷ روز (شامل معوق): '+money(y.data.paid),'نقدینگی بدون وصول دریافتی‌ها: '+money(net));if(net<0)details.push('هشدار: کسری احتمالی '+money(-net)+'؛ وصول‌ها قطعی فرض نشده‌اند.');}}
+  if(can('money','reports')){const x=h.read({metric:'cash',mode:'total',period:'current'}),y=h.read({metric:'cheques',mode:'total',period:'until',days:7,scope:'open',direction:'all',kindFilter:'both'});if(numeric(x?.data?.value)&&numeric(y?.data?.paid)&&numeric(y?.data?.received)){const net=x.data.value-y.data.paid;details.push('تعهدات باز تا ۷ روز (شامل معوق): '+money(y.data.paid),'نقدینگی بدون وصول دریافتی‌ها: '+money(net));if(net<0)details.unshift('هشدار: کسری احتمالی '+money(-net)+'؛ وصول‌ها قطعی فرض نشده‌اند.');}}
   return details.length?out('گزارش مدیریت بر اساس دسترسی فعلی و اطلاعات ثبت‌شده',{},details,[],{kind:'dashboard'}):denied();
  }
  if(/(?:پیش بینی|کسری|برآورد).*(?:نقدینگی|وجه نقد)|نقدینگی.*(?:تا اخر|تا پایان)/.test(q)){
@@ -182,7 +182,7 @@ async function run(q,ctx={},h){
  }
  const adv=analytics(st,text,scope,today,h,ctx,aliases,forced);if(adv)return adv;
  if(/راس گیری|میانگین موعد|محاسبه سود معامله|سود ماهانه|سود مرکب|سود ساده/.test(text)&&!/اقساط.*ماهه|محاسبه اقساط/.test(text))return B.runSmart(question,ctx,h);
- if(/محاسبه اقساط|قسط.*ماهه|اقساط.*ماهه|^اقساط /.test(text)){
+ if(/محاسبه اقساط|قسط.*ماهه|اقساط.*ماهه|^اقساط .*درصد/.test(text)){
   if(!can('money'))return denied();
   const m=C.toEn(question).match(/(\d+(?:[.٫]\d+)?\s*(?:میلیارد|میلیون|هزار)?\s*(?:تومان|تومن|ریال))/);
   const term=text.match(/(\d+)\s*ماه/),rate=text.match(/(\d+(?:\.\d+)?)\s*(?:درصد|٪|%)/),pre=text.match(/(?:پیش پرداخت|نقد)\s*(\d+(?:\.\d+)?)\s*(?:درصد|٪|%)/);
@@ -196,15 +196,22 @@ async function run(q,ctx={},h){
  }
  // Preserve direct routes, then expand intent recognition using the same typed reports.
  const direct=B.specialistRoute(question,ctx,today);
- if(direct&&!forced&&!aliases.some(a=>whole(text,a.alias)))return resultFor(direct,h,ctx);
+ if(direct&&!forced&&!aliases.some(a=>whole(text,a.alias))&&(!(direct.person||direct.product)||resolve(st,direct.person?'person':'product',text,aliases).length===1))return resultFor(direct,h,ctx);
  const explicit=dateScope(question,today,st.settings,null);
  if(explicit&&!explicit.invalid&&ctx.lastReport&&/^(?:پریروز|امروز|دیروز|این ماه|ماه قبل|ماه گذشته|این هفته|هفته قبل|امسال|\d+ روز اخیر)(?: چی| چطور| چقدر بود)?$/.test(text)){
   const {period,from,to,days,...base}=ctx.lastReport;return resultFor({...base,...explicit},h,ctx);
  }
  let ps=forced?.kind==='person'?[forced.item]:resolve(st,'person',text,aliases),gs=forced?.kind==='product'?[forced.item]:resolve(st,'product',text,aliases);
+ if(!forced&&ctx.lastReport?.person&&!ps.length&&/ازش|بهش|حسابش|طلبش|بدهیش|همون شخص|همان شخص/.test(text)){const p=st.people.filter(x=>norm(x.name)===norm(ctx.lastReport.person));if(p.length===1)ps=p;}
+ if(!forced&&ctx.lastReport?.product&&!gs.length&&/همون کالا|همان کالا|همین کالا|موجودیش|فروشش/.test(text)){const p=st.products.filter(x=>norm(x.name)===norm(ctx.lastReport.product));if(p.length===1)gs=p;}
+ // Fuzzy matches are never accepted silently: present the candidate for explicit selection.
+ if(!forced&&!ps.length&&!gs.length&&C.smartFind&&/حساب|طلب|بدهی|موجودی|فروش|خرید/.test(text)){
+ const cue=text.match(/^(?:مانده حساب|حساب|طلب از|بدهی به|موجودی|تعداد موجودی)\s+(.+?)(?:\s+چقدر.*)?$/);
+ if(cue){const kind=/^(?:موجودی|تعداد موجودی)/.test(text)?'product':'person',key=kind==='person'?'balances':'warehouse';if(can(key)&&cue[1].length>=3&&!/امروز|دیروز|ماه|هفته|کل|همه|صندوق|بانک|نقد/.test(cue[1])){const found=C.smartFind(st,cue[1],{limit:5}),rows=kind==='person'?found.people:found.products;if(rows?.length)return entityChoice(rows,kind,question,ctx);}}
+ }
  let clean=text;for(const e of [...ps,...gs])clean=(' '+clean+' ').replace(' '+norm(e.name)+' ',' ENTITY ').trim();
  let ms=metricOf(clean),rank=/بیشترین|کمترین|بهترین مشتری|پرفروش|پر فروش|رتبه|بزرگترین/.test(clean),qty=/چند تا|چندتا|تعداد|چند عدد|چند دستگاه/.test(clean);
- if(/بهترین مشتری/.test(clean))return clarify('بهترین مشتری از نظر مبلغ فروش، سود، تعداد خرید یا خوش‌حسابی؟ معیار را مشخص کنید.',ctx);
+ if(/بهترین مشتری/.test(clean)&&!ms.length)return clarify('بهترین مشتری از نظر مبلغ فروش یا تعداد فاکتور فروش؟ معیار را مشخص کنید.',ctx);
  if(/حساب|طلب|مطالبات|بدهکار|بدهی|بستانکار/.test(clean)&&!ms.length&&!/نقدینگی|بانک|صندوق/.test(clean)){
   const pay=/بدهی (?:من|ما)|بدهکاریم|بدهکارم|بستانکار|به کی بده/.test(clean);
   if(ps.length){if(!can('balances'))return denied();if(ps.length>1)return entityChoice(ps,'person',question,ctx);return resultFor({metric:'balance',mode:'person',person:ps[0].name,...(explicit||{period:'current'})},h,ctx);}
@@ -215,7 +222,15 @@ async function run(q,ctx={},h){
  if(ms.length>1)return clarify('چند موضوع در سؤال وجود دارد: '+ms.map(x=>label[x]).join('، ')+'. لطفاً یکی را مشخص کنید یا از مقایسه استفاده کنید.',ctx);
  if(ms.length===1){
   let m=ms[0],req={metric:m,mode:'total',...scope};
-  if(ps.length&&gs.length)return clarify('گزارش شخص و کالا همزمان در این مسیر تفکیک نمی‌شود؛ یکی را انتخاب کنید.',ctx);
+  if(ps.length&&gs.length){
+ if(!can('reports','balances','warehouse'))return denied();
+ if(m!=='sales'&&m!=='purchases')return clarify('برای گزارش ترکیبی شخص و کالا، مبلغ یا تعداد فروش/خرید را مشخص کنید.',ctx);
+ if(ps.length>1)return entityChoice(ps,'person',question,ctx);if(gs.length>1)return entityChoice(gs,'product',question,ctx);
+ const p=ps[0],g=gs[0],r=rangeOf(scope,today,st);if(!r)return clarify('بازه معتبر نیست.',ctx);if(m==='purchases'&&!can('cost'))return denied();
+ let amount=0,count=0;const base=m==='sales'?'sale':'purchase';
+ for(const i of st.invoices){if(i.personId!==p.id||i.date>r.to||(r.from&&i.date<r.from)||![base,base+'_return'].includes(i.type))continue;const sign=i.type===base?1:-1;for(const l of C.invoiceTotals(i).lines)if(l.productId===g.id){amount+=sign*l.net;count+=sign*l.qty;}}
+ return out((m==='sales'?'فروش':'خرید')+' خالص '+g.name+' — '+p.name,{},[rangeText(r),'مبلغ بدون مالیات: '+money(amount),'تعداد خالص: '+C.fmtQty(count)], [okEntity('person',p)],{kind:'entity-cross-report',value:qty?count:amount});
+ }
   if(gs.length){if(m!=='sales')return clarify('برای کالا مبلغ فروش، تعداد فروش، سود ناخالص یا موجودی را مشخص کنید.',ctx);if(!can('warehouse','reports'))return denied();if(gs.length>1)return entityChoice(gs,'product',question,ctx);req={metric:qty?'product-qty':'product-sales',mode:'product',product:gs[0].name,...scope};}
   else if(ps.length){if(!can('balances'))return denied();if(ps.length>1)return entityChoice(ps,'person',question,ctx);if(!['sales','purchases','receipts','payments','turnover','sale-count','purchase-count','invoice-count'].includes(m))return clarify('این معیار به تفکیک شخص پشتیبانی نمی‌شود.',ctx);req={metric:m,mode:'person',person:ps[0].name,...scope};}
   else if(rank){if(!['sales','purchases','turnover','sale-count','purchase-count','invoice-count'].includes(m))return clarify('رتبه‌بندی این معیار نیاز به مشخص کردن شخص یا کالا دارد.',ctx);req={metric:m==='sales'&&/کالا|محصول|گوشی|پرفروش|پر فروش/.test(clean)?(qty?'product-qty':'product-sales'):m,mode:'rank',order:/کمترین/.test(clean)?'asc':'desc',limit:5,...scope};}
