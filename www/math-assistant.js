@@ -74,10 +74,18 @@ function parseDebt(text){
  if(candidates.length!==1)return {error:'کدام مبلغ اصل بدهی و کدام مبلغ قسط ماهانه است؟ مبلغ قسط را با عنوان «ماهانه» مشخص کنید.'};
  const pay=candidates[0],base=as.find(x=>x!==pay);
  const principal=amountOf(base.raw,unit||C.unit),payment=amountOf(pay.raw,unit||C.unit);
- const delay=delayed?ms[0].n:0,delayBp=delayed?rs[0].bp:0,payBp=rs[delayed?1:0].bp;
- // Only assign rates when clauses establish which rate applies to each phase.
- const before=s.slice(Math.max(0,rs[0].index-100),rs[0].end+35),after=delayed?s.slice(Math.max(0,rs[1].index-100),rs[1].end+35):'';
- if(delayed&&(!/بدهکار|پرداختی نداشته|پرداخت نداشته|بدون پرداخت|تاخیر|تأخیر|معوق|اول/.test(before)||!/پرداخت|قسط|از زمانی|بعد|شروع/.test(after)))return {error:'مشخص کنید کدام نرخ مربوط به دوره بدون پرداخت و کدام مربوط به دوره اقساط است.'};
+ const delay=delayed?ms[0].n:0;let delayBp=delayed?rs[0].bp:0,payBp=rs[delayed?1:0].bp;
+ // Bind each rate to the nearest explicit phase cue, not arbitrary number order.
+ if(delayed){
+ const phase=v=>{
+  const no=[...v.matchAll(/(?:بدون پرداخت|پرداختی نداشته|پرداخت نداشته|پرداخت نکرد|معوق|تاخیر|تأخیر|دوره اول|بدهکار بوده)/g)].pop();
+  const yes=[...v.matchAll(/(?:پس از شروع پرداخت|بعد از شروع پرداخت|از زمانی که پرداختی (?:داره|دارد)|از زمانی که پرداخت|پس از پرداخت|بعد از پرداخت|دوره (?:اقساط|دوم)|از زمان پرداخت|هنگام پرداخت|سود اقساط)/g)].pop();
+  if(!no&&!yes)return '';return !yes||no&&no.index>yes.index?'delay':'pay';
+ };
+ const p1=phase(s.slice(Math.max(0,rs[0].index-160),rs[0].index)),p2=phase(s.slice(rs[0].end,rs[1].index));
+ if(!p1||!p2||p1===p2)return {error:'هر نرخ را با عنوان دوره بدون پرداخت یا پس از شروع اقساط مشخص کنید؛ ترتیب نامشخص را حدس نمی‌زنم.'};
+ delayBp=p1==='delay'?rs[0].bp:rs[1].bp;payBp=p1==='pay'?rs[0].bp:rs[1].bp;
+ }
  if(!Number.isSafeInteger(principal)||!Number.isSafeInteger(payment)||delay===null||delayBp===null||payBp===null)return {error:'مبالغ، مدت یا درصد معتبر نیست؛ دوباره با واحد دقیق وارد کنید.'};
  return {principal,payment,delay,delayBp,payBp,timing:/اول ماه|ابتدای ماه|اولین قسط امروز|اولین پرداخت امروز|قسط اول همین الان|قسط اول الان/.test(s)?'start':'end',delayMethod:/سود ساده|روی اصل ثابت/.test(s)?'simple':'compound'};
 }
