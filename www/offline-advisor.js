@@ -209,7 +209,7 @@ async function run(q,ctx={},h){
  const cue=text.match(/^(?:مانده حساب|حساب|طلب از|بدهی به|موجودی|تعداد موجودی)\s+(.+?)(?:\s+چقدر.*)?$/);
  if(cue){const kind=/^(?:موجودی|تعداد موجودی)/.test(text)?'product':'person',key=kind==='person'?'balances':'warehouse';if(can(key)&&cue[1].length>=3&&!/امروز|دیروز|ماه|هفته|کل|همه|صندوق|بانک|نقد/.test(cue[1])){const found=C.smartFind(st,cue[1],{limit:5}),rows=kind==='person'?found.people:found.products;if(rows?.length)return entityChoice(rows,kind,question,ctx);}}
  }
- let clean=text;for(const e of [...ps,...gs])clean=(' '+clean+' ').replace(' '+norm(e.name)+' ',' ENTITY ').trim();
+ let clean=norm(question.replace(/(?:از\s+|تا\s+)?(?:[۱۲۳۴۵۶۷۸۹۰\d]{4})[\/.-][۱۲۳۴۵۶۷۸۹۰\d]{1,2}[\/.-][۱۲۳۴۵۶۷۸۹۰\d]{1,2}/g,' '));for(const e of [...ps,...gs])clean=(' '+clean+' ').replace(' '+norm(e.name)+' ',' ENTITY ').trim();
  let ms=metricOf(clean),rank=/بیشترین|کمترین|بهترین مشتری|پرفروش|پر فروش|رتبه|بزرگترین/.test(clean),qty=/چند تا|چندتا|تعداد|چند عدد|چند دستگاه/.test(clean);
  if(/بهترین مشتری/.test(clean)&&!ms.length)return clarify('بهترین مشتری از نظر مبلغ فروش یا تعداد فاکتور فروش؟ معیار را مشخص کنید.',ctx);
  if(/حساب|طلب|مطالبات|بدهکار|بدهی|بستانکار/.test(clean)&&!ms.length&&!/نقدینگی|بانک|صندوق/.test(clean)){
