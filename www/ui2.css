@@ -84,3 +84,33 @@ body.fq-search-focus #main{min-height:0;padding-bottom:12px!important;overscroll
 .fq-advisor-overview{padding:10px;margin:6px 0}.fq-advisor-line{padding:4px 2px;border-bottom:1px solid var(--line);line-height:1.55}.fq-advisor-line:last-child{border:0}.fq-advisor-overview .btn{margin-top:8px}.ui20-examples .ui2-chat-examples{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.ui20-examples .chip{white-space:normal;text-align:right;line-height:1.5;height:auto;min-height:40px;padding:7px 9px}
 
 .fq-math-schedule{margin:8px 0;max-width:100%}.fq-math-schedule summary{font-weight:700;cursor:pointer}.fq-math-scroll{overflow:auto;margin:8px 0;max-width:100%;border:1px solid var(--line);border-radius:9px;max-height:48vh;overscroll-behavior:contain}.fq-math-scroll table{width:100%;border-collapse:collapse;font-size:.86em;white-space:nowrap}.fq-math-scroll th,.fq-math-scroll td{padding:6px;border-bottom:1px solid var(--line);text-align:right}.fq-math-scroll thead th{position:sticky;top:0;background:var(--card);z-index:1}.fq-msg:has(.fq-math-schedule){max-width:100%;min-width:0;overflow-wrap:anywhere}
+
+/* v032: three independent rows, no history behind the input; viewport-limited composer. */
+.ui20-chat{grid-template-rows:auto minmax(0,1fr) auto;gap:7px}
+.fq-chat-top{min-width:0;background:var(--card);border:1px solid var(--line);padding:7px 8px;border-radius:12px}
+.fq-chat-top .ch{font-size:calc(12px * var(--fs,1));color:var(--mut)}
+.fq-chat-top-actions,.fq-chat-actions,.fq-chat-compose-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fq-chat-tool{font:inherit;font-size:calc(12px * var(--fs,1));color:var(--blue);background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 9px;min-height:34px;display:inline-flex;align-items:center;justify-content:center;gap:4px;cursor:pointer}
+.fq-chat-tool:disabled{opacity:.45;cursor:default}.fq-chat-tool .ic{width:15px;height:15px}
+.ui20-chat .fq-chat-history{gap:12px;padding:3px 0}
+.ui20-chat .fq-msg{white-space:normal;padding:12px;line-height:1.75}
+.ui20-chat .fq-user{align-self:flex-start;background:var(--soft);max-width:92%;border:1px solid var(--line)}
+.ui20-chat .fq-bot{align-self:stretch;max-width:100%;width:100%;border-inline-start:3px solid var(--blue)}
+.fq-chat-meta{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:7px;font-size:calc(11px * var(--fs,1));color:var(--mut)}
+.fq-chat-meta b{color:var(--blue)}.fq-chat-meta time{font-variant-numeric:tabular-nums;white-space:nowrap}
+.fq-chat-text{white-space:pre-wrap;overflow-wrap:anywhere}
+.fq-bot>.fq-chat-text{font-weight:650}.fq-chat-actions{padding-top:8px;margin-top:9px;border-top:1px solid var(--line);white-space:normal}
+.ui20-chat .ui2-chat-compose{background:var(--card);position:static;overflow:hidden;gap:8px;align-items:flex-end;padding:8px!important}
+.fq-chat-input-wrap{flex:1 1 0;min-width:0;overflow:hidden;background:var(--card)}
+.fq-chat-compose-tools{justify-content:space-between;margin-bottom:4px;gap:3px}
+.fq-chat-compose-tools .fq-chat-tool{min-height:28px;border:0;padding:3px 4px}
+.ui20-chat .ui2-chat-compose textarea{display:block;box-sizing:border-box;width:100%;height:52px;min-height:52px;max-height:none;resize:none;overflow-y:auto;overscroll-behavior:contain;white-space:pre-wrap;background:var(--soft);padding:10px;line-height:1.55;font-size:calc(15px * var(--fs,1));margin:0}
+.ui20-chat .ui2-chat-compose textarea:focus{outline:2px solid var(--blue);outline-offset:-2px}
+.ui20-chat .ui2-chat-compose .btn{min-width:44px;width:44px;height:44px;align-self:flex-end;border-radius:12px}
+.ui20-chat.fq-chat-expanded{grid-template-rows:0 minmax(0,0fr) minmax(0,1fr);gap:0}
+.ui20-chat.fq-chat-expanded>.fq-chat-top,.ui20-chat.fq-chat-expanded>.ui20-scroll{visibility:hidden;overflow:hidden}
+.ui20-chat.fq-chat-expanded .ui2-chat-compose{align-self:stretch;min-height:0}
+body.fq-chat-typing:has(#main[data-page=assistant]) .nav{display:none}
+body.fq-chat-typing:has(#main[data-page=assistant]) .app{height:var(--fq-chat-view,100dvh);min-height:0;max-height:var(--fq-chat-view,100dvh)}
+#main[data-page=assistant]{padding:8px 8px 8px!important;min-height:0}
+@media(max-height:430px){body.fq-chat-typing #main[data-page=assistant] .fq-chat-top{display:none}.ui20-chat{grid-template-rows:auto minmax(0,1fr) auto}body.fq-chat-typing #main[data-page=assistant] .ui20-chat:not(.fq-chat-expanded){grid-template-rows:minmax(0,1fr) auto}}
