@@ -227,5 +227,6 @@ function tryMath(raw,ctx={},h){
  }
  return null;
 }
-const api={normalize,expression,display,parseDebt,schedule,tryMath,isWordProblem};root.FQMath=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+const problemFacts=s=>({amounts:amounts(s),rates:rates(s),months:[...s.matchAll(new RegExp('('+number+')\\s*ماه(?:ه)?(?=\\s|$|[،.؟؛])','gu'))].map(m=>({raw:m[0],n:F.monthCount(m[1]),index:m.index,end:m.index+m[0].length}))});
+const api={normalize,expression,display,parseDebt,schedule,tryMath,isWordProblem,problemFacts};root.FQMath=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);

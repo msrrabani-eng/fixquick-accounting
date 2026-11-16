@@ -125,8 +125,8 @@ async function smartAskQuestion(text){
  try{if(!await chatReserve()){if(valid()){smartBusy=false;if(!chatPaid()&&chatFreeLeft()===0)paywall('chat');}return;}}catch(e){if(valid()){smartBusy=false;toast('ثبت سهمیه سؤال ناموفق بود.',true);}return;}
  if(!valid()){if(job===smartJob)smartBusy=false;return;}
  smartDraft='';smartExpanded=false;document.body.classList.remove('fq-chat-typing');document.body.style.removeProperty('--fq-chat-view');const unit=Core.unit;smartTalk.push({role:'user',text:q,at:Date.now(),unit});let out;render();
- try{await new Promise(res=>setTimeout(res,0));if(!valid())return;if(!dataAccess){out=await FQLocalMath.solve(q,smartTalk.slice(0,-1),Core.isoToJalali(today()));}else{const h=smartHandlers(valid);out=typeof FQAdvisor!=='undefined'?await FQAdvisor.run(q,context,h):await FQReports.runSmart(q,context,h);}}
- catch(e){out={text:'گزارش کامل نشد؛ هیچ مبلغ حدسی تولید نشد.',ctx:context,details:[String(e?.message||e)],actions:[],source:dataAccess?'خطای گزارش':'خطای اجرای مدل محلی'};}
+ try{await new Promise(res=>setTimeout(res,0));if(!valid())return;if(!dataAccess){out=await FQLocalMath.solve(q,smartTalk.slice(0,-1),Core.isoToJalali(today()),context);}else{const h=smartHandlers(valid);out=typeof FQAdvisor!=='undefined'?await FQAdvisor.run(q,context,h):await FQReports.runSmart(q,context,h);}}
+ catch(e){out={text:'محاسبه یا گزارش کامل نشد؛ هیچ مبلغ حدسی تولید نشد.',ctx:context,details:[String(e?.message||e)],actions:[],source:dataAccess?'خطای گزارش':'خطای اجرای مدل محلی'};}
  finally{if(job===smartJob)smartBusy=false;}
  if(!valid())return;
  smartContext=out.ctx||{};smartTalk.push({role:'assistant',text:out.text,details:out.details,actions:out.actions,source:out.source||'دستیار حسابداری',rows:out.rows,at:Date.now(),unit});render();

@@ -6,7 +6,7 @@ global.Capacitor={Plugins:{FqLocalMath:{status:async()=>({ready:true,running:fal
 const first=M.action('test');assert.equal((await M.status()).running,true);
 await assert.rejects(M.action('test'));await assert.rejects(M.solve('1+1',[],'1405/08/25'));assert.equal(calls,1);
 await M.action('stop');await first;assert.equal(stops,1);assert.equal((await M.status()).running,false);
-assert.equal((await M.solve('17+25',[],'1405/08/25')).text,'42');
+assert.equal((await M.solve('17+25',[],'1405/08/25')).text,'۴۲');
 const read=p=>fs.readFileSync(p,'utf8'),j=read('local-math/FqMathPlugin.java'),s=read('local-math/FqMathService.java'),n=read('local-math/engine.cpp');
 assert.match(j,/DIR="local-math-v035"/);assert.match(j,/fq_local_math_v035/);assert.match(j,/7485fe6f11af29433bc51cab58009521f205840f5b4ae3a32fa7f92e8534fdf5/);
 assert.doesNotMatch(j,/target\.delete\(|model\(\)\.delete\(/);assert.match(j,/if\(input\.equals\(model\(\)\)\)recheckFailed=true;else input\.delete\(\)/);

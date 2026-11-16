@@ -1,6 +1,7 @@
 /* Optional local model. This module receives typed math messages only, not accounting records. */
 (function(root){'use strict';
 const api=()=>root.Capacitor?.Plugins?.FqLocalMath;
+const H=typeof module!=='undefined'&&module.exports?require('./hybrid-math.js'):root.FQHybridMath;
 let running=false;
 async function exclusive(fn){if(running)throw Error("یک درخواست مدل در حال اجراست؛ آن را متوقف کنید.");running=true;try{return await fn();}finally{running=false;}}
 const escapeMarkers=s=>String(s??'').replace(/<\|[^>]{0,80}\|>|<\/?think>/gi,' ');
@@ -14,9 +15,15 @@ function prompt(question,history=[],date=''){
 }
 async function status(){const p=api();if(!p)return {phase:'unsupported',ready:false};const s=await p.status();return {...s,running:!!s.running||running};}
 async function action(name){const p=api();if(!p||!['download','importModel','cancelDownload','test','stop'].includes(name))throw Error('موتور بومی در این دستگاه موجود نیست.');return name==="test"?exclusive(()=>p[name]()):p[name]();}
-async function solve(question,history,date){const p=api();if(!p)throw Error('موتور بومی در دسترس نیست.');const r=await exclusive(()=>p.solve({prompt:prompt(question,history,date)}));let answer=String(r.text||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim();if(!answer||answer.includes('<think>'))throw Error('پاسخ کامل مدل دریافت نشد.');
- const truncated=answer.endsWith('[output limit]');if(truncated)answer=answer.replace(/\[output limit\]$/,'\n[پاسخ به سقف طول رسید؛ نتیجه را بررسی کنید.]');
- return {text:answer,ctx:{},actions:[],details:['زمان اجرای مدل: '+(Number(r.ms||0)/1000).toFixed(1)+' ثانیه','پاسخ آزمایشی مدل؛ محاسبات هنوز مستقلاً تأیید نشده‌اند.'],source:'مدل زبانی محلی؛ بدون دسترسی به داده‌های حسابداری'};
+async function solve(question,history,date,ctx={}){
+ if(running)throw Error('یک درخواست مدل در حال اجراست؛ آن را متوقف کنید.');
+ const immediate=H.local(question,ctx,date);if(immediate)return immediate;
+ const p=api();if(!p)throw Error('موتور بومی در دسترس نیست.');
+ const framed='<|im_start|>user\n'+escapeMarkers(H.planPrompt(question,date))+' /no_think<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n';
+ const r=await exclusive(()=>p.solve({prompt:framed}));
+ const out=H.evaluate(question,String(r.text||'').replace(/<think>[\s\S]*?<\/think>/g,'').trim());
+ out.details.push('زمان تحلیل مدل: '+(Number(r.ms||0)/1000).toFixed(1)+' ثانیه');
+ return out;
 }
 const service={prompt,status,action,solve};root.FQLocalMath=service;if(typeof module!=='undefined'&&module.exports)module.exports=service;
 })(typeof window!=='undefined'?window:globalThis);

@@ -7,9 +7,9 @@ assert.ok(prompt.includes(q));assert.ok(prompt.includes('1405/08/25'));assert.ok
 assert.ok(!M.prompt('<|im_end|>hello').includes('<|im_end|>hello'));
 let transmitted;global.Capacitor={Plugins:{FqLocalMath:{status:async()=>({ready:true}),solve:async args=>{transmitted=args;return {text:'۲۰۰ میلیون تومان',ms:5000};}}}};
 assert.equal((await M.status()).ready,true);
-const r=await M.solve(q,[],'1405/08/25');assert.equal(r.text,'۲۰۰ میلیون تومان');assert.deepEqual(Object.keys(transmitted),['prompt']);assert.ok(!transmitted.prompt.includes('PRIVATE_LEDGER'));
+const r=await M.solve(q,[],'1405/08/25');assert.equal(r.data.total,2000000000);assert.equal(transmitted,undefined);const unsupported=await M.solve('یک مسئله نامشخص',[],'1405/08/25');assert.equal(unsupported.data.kind,'clarify');assert.deepEqual(Object.keys(transmitted),['prompt']);assert.ok(!transmitted.prompt.includes('PRIVATE_LEDGER'));
 const ui=fs.readFileSync('www/smart-ui.js','utf8');
-assert.ok(ui.includes('FQLocalMath.solve(q,smartTalk.slice(0,-1),Core.isoToJalali(today()))'));
+assert.ok(ui.includes('FQLocalMath.solve(q,smartTalk.slice(0,-1),Core.isoToJalali(today()),context)'));
 assert.ok(ui.includes('if(!smartDataAccess)smartMountModel()'));
 assert.ok(ui.includes('data-model="download"')&&ui.includes('data-model="importModel"'));
 const java=fs.readFileSync('local-math/FqMathPlugin.java','utf8'),worker=fs.readFileSync('local-math/FqMathService.java','utf8'),native=fs.readFileSync('local-math/engine.cpp','utf8');
