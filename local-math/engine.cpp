@@ -37,7 +37,8 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_ir_fixquick_accounting_FqMathServic
         auto file=bytes(e,path),input=bytes(e,prompt);
         std::unique_ptr<llama_model,decltype(&llama_model_free)> model(llama_model_load_from_file(file.c_str(),mp),llama_model_free);
         if(!model||stop(&limits))throw std::runtime_error("Model load failed or cancelled; check RAM");
-        stage=2;auto cp=llama_context_default_params();cp.n_ctx=3072;cp.n_batch=256;cp.n_ubatch=128;cp.n_threads=4;cp.n_threads_batch=4;
+        stage=2;const bool probe=maximum<=24;
+        auto cp=llama_context_default_params();cp.n_ctx=probe?512:3072;cp.n_batch=probe?64:256;cp.n_ubatch=probe?64:128;cp.n_threads=4;cp.n_threads_batch=4;
         std::unique_ptr<llama_context,decltype(&llama_free)> ctx(llama_init_from_model(model.get(),cp),llama_free);
         if(!ctx)throw std::runtime_error("Could not allocate inference context");
         llama_set_abort_callback(ctx.get(),stop,&limits);
@@ -47,14 +48,18 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_ir_fixquick_accounting_FqMathServic
         std::vector<llama_token> tokens(-count);
         count=llama_tokenize(vocab,input.data(),input.size(),tokens.data(),tokens.size(),false,true);
         if(count<=0)throw std::runtime_error("Prompt tokenization failed");
-        int budget=std::min({int(maximum),640,3072-count-8});
+        int budget=std::min({int(maximum),640,int(cp.n_ctx)-count-8});
         if(budget<1)throw std::runtime_error("Insufficient context");
-        for(int i=0;i<count;i+=256) {
-            if(stop(&limits)||llama_decode(ctx.get(),llama_batch_get_one(tokens.data()+i,std::min(256,count-i)))!=0)throw std::runtime_error("Prompt evaluation interrupted");
+        percent=0;
+        const int chunk=probe?4:32;
+        for(int i=0;i<count;i+=chunk) {
+            const int batch=std::min(chunk,count-i);
+            if(stop(&limits)||llama_decode(ctx.get(),llama_batch_get_one(tokens.data()+i,batch))!=0)throw std::runtime_error("Prompt evaluation interrupted");
+            percent=(i+batch)*100/count;
         }
         std::unique_ptr<llama_sampler,decltype(&llama_sampler_free)> sampler(llama_sampler_init_greedy(),llama_sampler_free);
         if(!sampler)throw std::runtime_error("Sampler allocation failed");
-        stage=4;std::string out;bool ended=false;
+        stage=4;generated=0;std::string out;bool ended=false;
         for(int i=0;i<budget;i++) {
             if(stop(&limits))throw std::runtime_error("Inference cancelled or timed out");
             auto token=llama_sampler_sample(sampler.get(),ctx.get(),-1);
@@ -62,7 +67,7 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_ir_fixquick_accounting_FqMathServic
             char buf[512];int n=llama_token_to_piece(vocab,token,buf,sizeof(buf),0,false);
             if(n<0||n>int(sizeof(buf)))throw std::runtime_error("Token decoding failed");
             out.append(buf,n);generated=i+1;
-            if(llama_decode(ctx.get(),llama_batch_get_one(&token,1))!=0)throw std::runtime_error("Generation interrupted");
+            if(i+1<budget&&llama_decode(ctx.get(),llama_batch_get_one(&token,1))!=0)throw std::runtime_error("Generation interrupted");
         }
         if(out.empty())throw std::runtime_error("Model returned empty answer");
         if(!ended)out+="\n[output limit]";

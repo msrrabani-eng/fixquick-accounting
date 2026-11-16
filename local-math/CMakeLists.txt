@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.22)
 project(fqmath LANGUAGES C CXX)
+# Keep the signed debug APK for in-place updates, but optimize the native numerical engine.
+# Apply to this directory and the vendored llama/ggml targets, not just JNI.
+if(ANDROID)
+    add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-O3>)
+endif()
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)

@@ -1,0 +1,12 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const read=p=>fs.readFileSync(p,'utf8'),cm=read('local-math/CMakeLists.txt'),n=read('local-math/engine.cpp'),j=read('local-math/FqMathPlugin.java');
+assert.ok(cm.includes('add_compile_options')&&cm.includes('-O3'));
+assert.ok(cm.indexOf('add_compile_options')<cm.indexOf('add_subdirectory(llama'));
+assert.match(n,/cp\.n_ctx=probe\?512:3072/);
+assert.match(n,/percent=\(i\+batch\)\*100\/count/);
+assert.match(j,/DIR="local-math-v035"/);
+assert.match(j,/fq_local_math_v035/);
+assert.doesNotMatch(j,/target\.delete\(|model\(\)\.delete\(/);
+assert.match(read('.github/workflows/build-apk.yml'),/Verified -O3 for JNI, GGML and llama core/);
+console.log('v038 optimization and existing model preservation checks passed; mobile performance not measured');

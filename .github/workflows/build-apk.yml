@@ -50,6 +50,7 @@ jobs:
           node tests/vol035.test.js
           node tests/vol036.test.js
           node tests/vol037.test.js
+          node tests/vol038.test.js
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |
@@ -138,6 +139,25 @@ jobs:
 
       - name: Collect APK
         run: cp android/app/build/outputs/apk/debug/app-debug.apk FixQuick-Accounting.apk
+
+      - name: Verify native inference optimization flags
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, shlex
+          files=list(pathlib.Path('android/app/.cxx').rglob('compile_commands.json'))
+          assert files, 'Native compile commands are missing'
+          verified=set()
+          for file in files:
+              for row in json.loads(file.read_text()):
+                  name=pathlib.Path(row['file']).name
+                  if name not in ('engine.cpp','ggml.c','llama-context.cpp'): continue
+                  args=row.get('arguments') or shlex.split(row['command'])
+                  opts=[a for a in args if a in ('-O0','-O1','-O2','-O3','-Os','-Oz','-Og','-Ofast')]
+                  assert opts and opts[-1]=='-O3', (name,opts)
+                  verified.add(name)
+          assert verified=={'engine.cpp','ggml.c','llama-context.cpp'}, verified
+          print('Verified -O3 for JNI, GGML and llama core')
+          PY
 
       - name: Verify isolated math engine and retained permission restrictions
         run: |

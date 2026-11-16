@@ -129,7 +129,7 @@ public final class FqMathPlugin extends Plugin {
             if(!supported()||!verified())throw new IOException("Download and verify model first");
             ActivityManager.MemoryInfo m=new ActivityManager.MemoryInfo();((ActivityManager)getContext().getSystemService(Context.ACTIVITY_SERVICE)).getMemoryInfo(m);
             if(m.lowMemory||m.totalMem<5000000000L||m.availMem<1300000000L)throw new IOException("Insufficient available RAM; close other apps");
-            String prompt=test?"<|im_start|>system\nAnswer with only the requested number.<|im_end|>\n<|im_start|>user\n17 + 25 = ? /no_think<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n":call.getString("prompt","");
+            String prompt=test?"<|im_start|>user\n17+25=? /no_think<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n":call.getString("prompt","");
             if(prompt.isEmpty()||prompt.length()>12000)throw new IOException("Invalid prompt length");
             active=call;probe=test;started=SystemClock.elapsedRealtime();executionStage="connecting";lastRunError="";loadPercent=0;generated=0;stopping=false;
             alarm=()->{if(active==call)requestStop("Inference timeout (180 s)");};main.postDelayed(alarm,180000);

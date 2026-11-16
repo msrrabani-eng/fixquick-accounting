@@ -74,7 +74,7 @@ function smartMountModel(){
    const percent=s.total>0?Math.min(100,Math.floor(s.bytes/s.total*100)):0;
    const loading=['downloading','paused'].includes(s.phase),offer=['missing','error'].includes(s.phase);
    panel.querySelector('.fq-model-status').textContent=(labels[s.phase]||s.phase)+(loading?' — '+fa(percent)+'٪':'')+(s.ready?(s.tested?' — تست اولیه موفق':' — تست اجرا لازم است'):'');
-   const progress=s.running?(stages[s.stage]||'در حال اجرا')+' — '+fa(Math.floor((s.elapsed||0)/1000))+' ثانیه'+(s.stage==='loading'?' · '+fa(s.loadPercent||0)+'٪':s.stage==='generating'?' · '+fa(s.generated||0)+' توکن':''):'';
+   const progress=s.running?(stages[s.stage]||'در حال اجرا')+' — '+fa(Math.floor((s.elapsed||0)/1000))+' ثانیه'+(['loading','prompt'].includes(s.stage)?' · '+fa(s.loadPercent||0)+'٪':s.stage==='generating'?' · '+fa(s.generated||0)+' توکن':''):'';
    panel.querySelector('.fq-model-error').textContent=progress||pending||probeText||s.runError||s.error||'';
    for(const [name,show] of [['download',offer],['importModel',offer],['cancelDownload',loading],['test',s.ready&&!s.running],['stop',s.running]]){const b=panel.querySelector('[data-model="'+name+'"]');b.hidden=!show;b.disabled=name==='stop'?false:smartBusy||busy||s.running;}
   }catch(e){if(valid())panel.querySelector('.fq-model-error').textContent=String(e.message||e);}
