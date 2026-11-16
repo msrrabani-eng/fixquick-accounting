@@ -36,7 +36,9 @@ async function run(q,c={}){reads=[];return O.runSmart(q,c,h);}
  sandbox.curName=()=> 'other';vm.runInContext('smartResetForUser()',sandbox);assert.equal(vm.runInContext('smartTalk.length',sandbox),0);assert.equal(vm.runInContext('Object.keys(smartContext).length',sandbox),0);
  assert.ok(ui.includes('FQReports.runSmart'));
  for(const path of ['www/ai-addon.js','www/ai-orchestrator.js','native-ai','tools/install_local_ai.py'])assert.equal(fs.existsSync(path),false,path);
- for(const path of ['www/index.html','www/sw.js','www/pages.js','www/smart-ui.js','www/report-assistant.js'])assert.doesNotMatch(fs.readFileSync(path,'utf8'),/Qwen|FQAI|FQOrchestrator|ai-addon\.js|ai-orchestrator\.js|install_local_ai|RECORD_AUDIO|llama\.cpp|nativeGenerate/i,path);
+ for(const path of ['www/index.html','www/sw.js','www/pages.js','www/smart-ui.js','www/report-assistant.js'])assert.doesNotMatch(fs.readFileSync(path,'utf8'),/FQAI|FQOrchestrator|ai-addon\.js|ai-orchestrator\.js|install_local_ai|RECORD_AUDIO|llama\.cpp|nativeGenerate/i,path);
+ // The new isolated FqLocalMath model may appear by name; retired assistant symbols remain prohibited.
+ assert.match(ui,/Qwen3\.5/);
  const workflow=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
  assert.match(workflow,/dump permissions/);assert.match(workflow,/RECORD_AUDIO/);
  assert.match(workflow,/lib\/arm64-v8a\/libfqmath\.so/);
