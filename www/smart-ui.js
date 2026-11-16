@@ -47,8 +47,8 @@ function smartEditorMount(){
  let normalHeight=window.visualViewport?.height||window.innerHeight,keyboardReduced=false;
  const sync=()=>{const view=chat.clientHeight||window.visualViewport?.height||window.innerHeight;chat.classList.toggle('fq-chat-expanded',smartExpanded);toggle.textContent=smartExpanded?'کوچک کردن':'بزرگ کردن';toggle.setAttribute('aria-expanded',String(smartExpanded));const max=FQChatFormat.pageLimit(Math.max(80,view-($('#fq-chat-input')?.parentElement?.querySelector('.fq-chat-compose-tools')?.offsetHeight||30)),smartExpanded);box.style.maxHeight=max+'px';box.style.height='auto';box.style.height=(smartExpanded?max:Math.min(max,Math.max(52,box.scrollHeight)))+'px';box.style.overflowY=box.scrollHeight>box.clientHeight+2?'auto':'hidden';};
  box.value=smartDraft;box.addEventListener('input',()=>{smartDraft=box.value;sync();});box.addEventListener('focus',()=>{document.body.classList.add('fq-chat-typing');requestAnimationFrame(sync);});box.addEventListener('blur',()=>{document.body.classList.remove('fq-chat-typing');requestAnimationFrame(sync);});
- toggle.onclick=()=>{smartExpanded=!smartExpanded;sync();box.focus({preventScroll:true});};
- const keyboard=$('#fq-chat-keyboard');keyboard.onclick=()=>box.blur();
+ toggle.disabled=box.disabled;toggle.onclick=()=>{if(box.disabled)return;smartExpanded=!smartExpanded;sync();box.focus({preventScroll:true});};
+ const keyboard=$('#fq-chat-keyboard');keyboard.disabled=box.disabled;keyboard.onclick=()=>box.blur();
  const observer=typeof ResizeObserver==='function'?new ResizeObserver(()=>{if(chat.isConnected)sync();else observer.disconnect();}):null;observer?.observe(chat);
  // Visual viewport on Android may resize separately from CSS layout.
  const viewport=()=>{if(!chat.isConnected){smartEditorDispose?.();return;}const v=window.visualViewport,h=v?.height||window.innerHeight,typing=document.activeElement===box;if(!typing){normalHeight=h;keyboardReduced=false;}else{normalHeight=Math.max(normalHeight,h);const reduced=normalHeight-h>90;if(keyboardReduced&&!reduced){keyboardReduced=false;box.blur();return;}keyboardReduced=reduced;}if(typing&&v)document.body.style.setProperty('--fq-chat-view',Math.round(h)+'px');else document.body.style.removeProperty('--fq-chat-view');sync();};
@@ -85,7 +85,7 @@ async function smartAskQuestion(text){
  smartBusy=true;
  // Reserve once per accepted submission, including follow-up questions; automatic dashboard is not counted.
  try{if(!await chatReserve()){if(valid()){smartBusy=false;if(!chatPaid()&&chatFreeLeft()===0)paywall('chat');}return;}}catch(e){if(valid()){smartBusy=false;toast('ثبت سهمیه سؤال ناموفق بود.',true);}return;}
- if(!valid())return;
+ if(!valid()){if(job===smartJob)smartBusy=false;return;}
  smartDraft='';smartExpanded=false;document.body.classList.remove('fq-chat-typing');document.body.style.removeProperty('--fq-chat-view');const unit=Core.unit;smartTalk.push({role:'user',text:q,at:Date.now(),unit});let out;render();
  try{await new Promise(res=>setTimeout(res,0));if(!valid())return;const h=smartHandlers(valid);out=typeof FQAdvisor!=='undefined'?await FQAdvisor.run(q,context,h):await FQReports.runSmart(q,context,h);}
  catch(e){out={text:'گزارش کامل نشد؛ هیچ مبلغ حدسی تولید نشد.',ctx:context,details:[String(e?.message||e)],actions:[],source:'خطای گزارش'};}
