@@ -124,46 +124,7 @@ function tradeProblem(raw){
  const assigned=[];
  for(let i=0;i<aa.length;i++){
   const a=aa[i],left=s.slice(i?aa[i-1].end:0,a.index),right=s.slice(a.end,i+1<aa.length?aa[i+1].index:s.length);
-  const before=Object.entries(roles).filter(([k,v])=>new RegExp('(?:^|\\s)(?:'+v+')(?:\\s+(?:به مبلغ|به قیمت|به ارزش|مبلغ|قیمت|به))?\\s*[:：]?\\s*
- const st=h?.state?.(),protectedNames=[...(st?.people||[]),...(st?.products||[])].map(x=>x.name||'');
- const n=normalize(raw,protectedNames),s=n.text;
- if(ctx.mathDebt&&/^(لغو|پایان محاسبه|لغو محاسبه|محاسبه جدید)$/.test(s))return result('محاسبه فرضی پایان یافت.');
- if(ctx.mathDebt&&/^(جدول|جدول اقساط|جزییات|جزئیات|محاسبات|دوباره محاسبه کن)$/.test(s))return renderDebt(ctx.mathDebt);
- if(ctx.mathDebt&&Number.isInteger(ctx.pendingRate)&&/^(?:دوره اول|دوره دوم|دوره اقساط|اقساط|دوره تاخیر|تاخیر|دوره بدون پرداخت|بدون پرداخت|بعد از شروع پرداخت)$/.test(s)){
- const d={...ctx.mathDebt};if(/اول|تاخیر|بدون پرداخت/.test(s))d.delayBp=ctx.pendingRate;else d.payBp=ctx.pendingRate;return renderDebt(d,n.fixes);
- }
- const d=parseDebt(s);
- if(d){if(d.error)return ask(d.error);d.inputUnit=unitOf(s)||C.unit;return renderDebt(d,n.fixes);}
- if(ctx.mathDebt&&/قسط|پرداخت ماهانه|ماهیانه|ماهانه|درصد|سود|تاخیر|تأخیر|اول ماه|ابتدای ماه|پایان ماه|اخر ماه|بدهی اولیه/.test(s)&&!/امروز چقدر|فروش|خرید|گزارش|موجودی|مانده حساب/.test(s)&&!(amounts(s).length===1&&rates(s).length===1&&!/قسط|تاخیر|تأخیر|دوره/.test(s))){
-  const a=amend(s,ctx.mathDebt);if(a?.ambiguous)return ask('این نرخ مربوط به دوره تأخیر است یا دوره اقساط؟',{...ctx,pendingRate:rates(s)[0]?.bp});if(a)return renderDebt(a,n.fixes);
- }
- let expr=s.replace(/^(?:حساب کن|محاسبه کن|نتیجه|حاصل|چقدر میشه|چقدر می شود)\s*:?\s*/,'').replace(/[؟?]$/,'').replace(/\s*(?:چقدر می شود|چقدر میشه|چند می شود|چقدر|مساوی است)\s*$/,'').replace(/=$/,'').replace(/به علاوه|بعلاوه|جمع با|به اضافه/g,'+').replace(/منهای|منها/g,'-').replace(/ضرب در/g,'*').replace(/تقسیم بر/g,'/').replace(/به توان/g,'^');
- if(/^[\d\s.+\-*/^()%٪×÷xX−–]+$/.test(expr)&&/[+\-*/^%٪×÷xX−–]/.test(expr)){try{const a=expression(expr);return result('نتیجه: '+display(a),{},['عبارت: '+C.toFa(expr),a[1]===1n?'محاسبه صحیح و دقیق.':'مقدار دقیق: '+C.toFa(a[0].toString())+' / '+C.toFa(a[1].toString())],{kind:'arithmetic',exact:[String(a[0]),String(a[1])]});}catch(e){return ask(e.message);}}
- const as=amounts(s),rs=rates(s),u=unitOf(s);
- if(as.length===2&&!rs.length&&/چند درصد|درصد تغییر|درصد رشد|درصد کاهش|درصد سود|حاشیه سود|درصد زیان/.test(s)&&!/ماه|قسط|دریافت|پرداخت ماهانه|مانده حساب|امروز|دیروز/.test(s)){
-  if(!u&&as.some(a=>!unitOf(a.raw)))return ask('واحد مبالغ را مشخص کنید.');
-  const a=amountOf(as[0].raw,u||C.unit),b=amountOf(as[1].raw,u||C.unit);
-  if(!Number.isSafeInteger(a)||!Number.isSafeInteger(b)||a<=0)return ask('مبلغ مبنا باید مثبت و معتبر باشد.');
-  let kind='درصد تغییر',base=a;
-  if(/خرید|بهای تمام شده|قیمت تمام شده|قیمت اولیه/.test(s)&&/فروش|قیمت نهایی/.test(s)){
-   if(!/خرید|بهای تمام شده|قیمت تمام شده|قیمت اولیه/.test(s.slice(0,as[0].index)))return ask('ابتدا قیمت خرید و سپس قیمت فروش را با عنوان مشخص وارد کنید.');
-   kind=/حاشیه سود/.test(s)?'حاشیه سود فروش':'بازده روی بهای خرید';if(kind==='حاشیه سود فروش')base=b;
-  }else if(!/از .* به |ابتدا|قبلا|مبنا|قیمت اولیه/.test(s))return ask('کدام مبلغ مبنا و کدام مبلغ نهایی است؟ مثال: از ۱۰۰ میلیون تومان به ۱۲۰ میلیون تومان.');
-  if(base<=0)return ask('مبنای درصد باید مثبت باشد.');
-  const frac=rational(BigInt(b-a)*100n,BigInt(base));return result(kind+': '+display(frac)+'٪',{},['مبلغ اولیه: '+money(a),'مبلغ نهایی: '+money(b),'تفاوت مبلغ: '+money(b-a),'مبنای درصد: '+money(base)],{kind:'percent-change',exact:[String(frac[0]),String(frac[1])],value:b-a});
- }
- if(as.length===1&&rs.length===1&&/چقدر|محاسبه|چند|حاصل|اضافه|کم کن/.test(s)&&!/ماه|قسط|از حساب|موجودی|فروش امروز|خرید امروز/.test(s)){
-  const a=amountOf(as[0].raw,u||C.unit),bp=rs[0].bp;if(!Number.isSafeInteger(a)||bp===null)return ask('مبلغ یا درصد روشن نیست.');
-  const part=round(BigInt(a)*BigInt(bp),B);let total=part,kind='درصد از مبلغ';
-  if(/اضافه|افزایش|بیشتر/.test(s)){total=BigInt(a)+part;kind='مبلغ با افزایش درصدی';}else if(/کم کن|کسر|تخفیف|کاهش/.test(s)){total=BigInt(a)-part;kind='مبلغ پس از کاهش درصدی';}
-  if(abs(total)>MAX)return ask('مبلغ از محدوده امن بیشتر است.');
-  return result(kind+': '+money(total),{},['مبلغ مبنا: '+money(a),'درصد: '+C.toFa(String(bp/100))+'٪','مبلغ درصد: '+money(part)],{kind:'percent',value:Number(total)});
- }
- return null;
-}
-const api={normalize,expression,display,parseDebt,schedule,tryMath,isWordProblem};root.FQMath=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
-})(typeof window!=='undefined'?window:globalThis);
-).test(left)).map(([k])=>k);
+  const before=Object.entries(roles).filter(([k,v])=>new RegExp('(?:^|\\s)(?:'+v+')(?:\\s+(?:به مبلغ|به قیمت|به ارزش|مبلغ|قیمت|به))?\\s*[:：]?\\s*$').test(left)).map(([k])=>k);
   const after=Object.entries(roles).filter(([k,v])=>new RegExp('^\\s*(?:'+v+')(?=\\s|[،.؟؛]|$)').test(right)).map(([k])=>k);
   const possible=before.length?before:after;
   if(possible.length!==1)return fail();
@@ -266,5 +227,5 @@ function tryMath(raw,ctx={},h){
  }
  return null;
 }
-const api={normalize,expression,display,parseDebt,schedule,tryMath};root.FQMath=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+const api={normalize,expression,display,parseDebt,schedule,tryMath,isWordProblem};root.FQMath=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(typeof window!=='undefined'?window:globalThis);
