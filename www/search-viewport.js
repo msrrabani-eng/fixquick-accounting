@@ -1,9 +1,58 @@
 /* Shared search viewport controller: main lists and modal pickers. */
 'use strict';
 (function(){
- let timer=0, active=null, normalHeight=0, wasReduced=false;
+ let timer=0, active=null, normalHeight=0, wasReduced=false, tap=null, tapTimer=0;
+ const queued=new Map();
  const selector='input[data-search-field],input[type=search],input[inputmode=search],.sbox input,input[id$="-q"],input[id$="-search"],#rep-pq,#pk-s,input[placeholder*="جستجو"]';
+ // Keep the search geometry and result DOM stable until a genuine pointer click
+ // completes. Prevent the default focus transfer, never synthesize a financial action.
+ function searchInput(el){return el?.matches?.(selector)?el:null;}
+ function scope(el){return el?.closest?.('.sheet-wrap')||el?.closest?.('#main')||null;}
+ const actionable='button,a[href],a[data-act],[role="button"],[data-act],[data-v]';
+ function targetFor(el){const b=el?.closest?.(actionable);return b&&!b.disabled&&b.getAttribute('aria-disabled')!=='true'&&!b.closest('[inert]')?b:null;}
+ function finishTap(){
+  clearTimeout(tapTimer);tapTimer=0;
+  if(!tap)return;
+  tap=null;const work=[...queued.entries()];queued.clear();
+  // Let existing click handlers navigate, close pickers and submit before redrawing.
+  setTimeout(()=>{sync();for(const [key,fn] of work){if(key?.isConnected)fn();}},0);
+ }
+ function down(e){
+  if(e.isPrimary===false||e.button!==0)return;
+  const input=searchInput(document.activeElement),target=targetFor(e.target),area=scope(input);
+  if(!input||!target||!area||scope(target)!==area||target.contains(input)||e.target?.closest?.('input,textarea,select,[contenteditable="true"]'))return;
+  if(tap)finishTap();
+  tap={id:e.pointerId,input,target,area,x:e.clientX,y:e.clientY,hash:location.hash};
+  // Cancel only the focus-changing down event, not pointerup, click or scrolling.
+  if(e.cancelable)e.preventDefault();
+  tapTimer=setTimeout(finishTap,1500);
+ }
+ function move(e){if(tap&&e.pointerId===tap.id&&Math.hypot(e.clientX-tap.x,e.clientY-tap.y)>14)finishTap();}
+ function up(e){if(!tap||e.pointerId!==tap.id)return;clearTimeout(tapTimer);tapTimer=setTimeout(finishTap,400);}
+ function clicked(e){
+  if(!tap)return;
+  const t=tap,b=targetFor(e.target);
+  if(b!==t.target){finishTap();return;}
+  clearTimeout(tapTimer);
+  tapTimer=setTimeout(()=>{
+   // A picker may already be closed or a route changed. Never blur its new field.
+   if(tap!==t)return;
+   if(t.input.isConnected&&document.activeElement===t.input&&location.hash===t.hash&&t.target.dataset.act!=='clrQ')t.input.blur();
+   finishTap();
+  },0);
+ }
+ // Coalesce pending renders per input; stale callbacks must check their original DOM.
+ window.afterSearchTap=(key,fn)=>{if(tap&&key&&scope(key)===tap.area){queued.set(key,fn);return;}if(key?.isConnected)fn();};
+ document.addEventListener('pointerdown',down,{capture:true,passive:false});
+ document.addEventListener('pointermove',move,true);
+ document.addEventListener('pointerup',up,true);
+ document.addEventListener('pointercancel',e=>{if(tap&&e.pointerId===tap.id)finishTap();},true);
+ document.addEventListener('click',clicked,true);
  function sync(){
+  if(tap){
+   if(tap.input.isConnected&&tap.target.isConnected&&location.hash===tap.hash)return;
+   finishTap();
+  }
   const v=window.visualViewport, el=document.activeElement;
   const input=el&&el.matches&&el.matches(selector)?el:null;
   const body=document.body;if(!body)return;
@@ -31,6 +80,6 @@
  document.addEventListener('focusout',schedule);
  document.addEventListener('input',e=>{if(e.target.matches?.(selector))schedule();});
  document.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.isComposing&&e.target.matches?.(selector)){e.preventDefault();e.target.blur();schedule();}});
- window.addEventListener('resize',schedule);window.addEventListener('hashchange',schedule);
+ window.addEventListener('resize',schedule);window.addEventListener('hashchange',()=>{finishTap();schedule();});
  window.visualViewport?.addEventListener('resize',schedule);window.visualViewport?.addEventListener('scroll',schedule);
 })();

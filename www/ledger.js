@@ -95,7 +95,7 @@ const docNoTxt = d => (d.no ? 'سند ' + fa(d.no) : 'سند');
 // the search text of every document is prepared in small steps so a big file never freezes the phone
 function docTextsReady(c) {
   if (c.texts.length === c.docs.length) return true; if (c.building) return false; c.building = true;
-  const step = () => { if (docCache !== c) return; const end = Math.min(c.docs.length, c.texts.length + 1500); for (let i = c.texts.length; i < end; i++) c.texts.push(Core.docText(S, c.docs[i])); if (end < c.docs.length) { const pr = $('#doc-prog'); if (pr) pr.textContent = fa(Math.round(end / c.docs.length * 100)) + '٪'; setTimeout(step, 0); } else { c.building = false; if ((location.hash || '').startsWith('#/vouchers')) render({ keepId: 'doc-q' }); } };
+  const step = () => { if (docCache !== c) return; const end = Math.min(c.docs.length, c.texts.length + 1500); for (let i = c.texts.length; i < end; i++) c.texts.push(Core.docText(S, c.docs[i])); if (end < c.docs.length) { const pr = $('#doc-prog'); if (pr) pr.textContent = fa(Math.round(end / c.docs.length * 100)) + '٪'; setTimeout(step, 0); } else { c.building = false; if ((location.hash || '').startsWith('#/vouchers')) { const input=$('#doc-q'); if(input)afterSearchTap(input,()=>{if((location.hash||'').startsWith('#/vouchers'))render({keepId:'doc-q'});});else render({keepId:'doc-q'}); } } };
   setTimeout(step, 0); return false;
 }
 function docTitle(d) {
@@ -483,7 +483,7 @@ function whTxView(id) {
   const sh = sheet('حواله انتقال ' + fa(x.no), '<div class="kv"><span>تاریخ</span><b>' + fmtDate(x.date) + '</b></div><div class="kv"><span>از انبار</span><b>' + esc(whName(x.from)) + '</b></div><div class="kv"><span>به انبار</span><b>' + esc(whName(x.to)) + '</b></div>' + (x.desc ? '<p class="hint">' + esc(x.desc) + '</p>' : '') + '<div class="card flush">' + x.items.map(l => { const p = Core.byId(S.products, l.productId); return '<div class="xr"><span><b>' + esc(p ? p.name : '—') + '</b>' + (l.note ? '<small class="ltr">' + esc(l.note) + '</small>' : '') + '</span><em>' + Core.fmtQty(l.qty) + '</em></div>'; }).join('') + '</div><button class="btn blue" data-e>' + ico('edit') + 'ویرایش</button>');
   sh.q('[data-e]').onclick = () => { sh.close(); whTxForm(x); };
 }
-document.addEventListener('input', e => { if (e.target.id === 'wh-q') { UI.whQ = e.target.value; clearTimeout(e.target._t); e.target._t = setTimeout(() => render({ keepId: 'wh-q' }), 180); } });
+document.addEventListener('input', e => { if (e.target.id === 'wh-q') { const input=e.target; UI.whQ = input.value; clearTimeout(input._t); input._t = setTimeout(() => afterSearchTap(input,()=>render({keepId:'wh-q'})), 180); } });
 
 const LEDGER_ACTIONS = {
   vchNew: () => { if (gate()) voucherForm(null); }, vchOpen: d => voucherView(+d.id),

@@ -143,7 +143,7 @@ function pickList(title, items, onPick, o) {
     let last = null;
     sh.q('#pk-l').innerHTML = (all.length > f.length ? '<p class="hint center">' + Core.toFa(all.length) + ' مورد؛ برای پیدا کردن سریع‌تر، جستجو کنید یا دسته را انتخاب کنید.</p>' : '') + (f.length ? f.map(i => '<button type="button" class="item" data-v="' + esc(i.value) + '"><span>' + esc(i.label) + (i.sub || (o.cats && !cat && i.cat) ? '<small>' + esc([o.cats && !cat ? i.cat : '', i.sub].filter(Boolean).join(' · ')) + '</small>' : '') + '</span>' + (i.right ? '<em class="' + (i.cls || '') + '">' + esc(i.right) + '</em>' : '') + '</button>').join('') : '<div class="empty">موردی پیدا نشد</div>');
   };
-  draw(); let dt; sh.q('#pk-s').addEventListener('input', () => { clearTimeout(dt); dt = setTimeout(draw, 150); });
+  draw(); let dt; sh.q('#pk-s').addEventListener('input', () => { clearTimeout(dt); const input=sh.q('#pk-s'); dt = setTimeout(() => afterSearchTap(input,draw), 150); });
   sh.q('#pk-cw').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b) return; cat = b.dataset.c; if (cat !== TOP) UI.pickCat = cat; sh.q('#pk-cw').innerHTML = chipRow(); draw(); });
   sh.q('#pk-l').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (!b) return; sh.close(); onPick(b.dataset.v); });
   if (o.addNew) sh.q('#pk-new').onclick = () => { sh.close(); o.onAdd(); };
