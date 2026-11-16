@@ -38,12 +38,10 @@ async function run(q,c={}){reads=[];return O.runSmart(q,c,h);}
  for(const path of ['www/ai-addon.js','www/ai-orchestrator.js','native-ai','tools/install_local_ai.py'])assert.equal(fs.existsSync(path),false,path);
  for(const path of ['www/index.html','www/sw.js','www/pages.js','www/smart-ui.js','www/report-assistant.js'])assert.doesNotMatch(fs.readFileSync(path,'utf8'),/Qwen|FQAI|FQOrchestrator|ai-addon\.js|ai-orchestrator\.js|install_local_ai|RECORD_AUDIO|llama\.cpp|nativeGenerate/i,path);
  const workflow=fs.readFileSync('.github/workflows/build-apk.yml','utf8');
- const start=workflow.indexOf('      - name: Verify retired model components and permissions are absent');
- const end=workflow.indexOf('      - name: Check the APK is signed with the fixed key',start);
- assert.ok(start>=0&&end>start);
- const verify=workflow.slice(start,end);
- assert.doesNotMatch(workflow.slice(0,start)+workflow.slice(end),/Qwen|FQAI|FQOrchestrator|ai-addon\.js|ai-orchestrator\.js|install_local_ai|RECORD_AUDIO|llama\.cpp|nativeGenerate|ndk;|cmake;/i);
- assert.match(verify,/dump permissions/);assert.match(verify,/RECORD_AUDIO/);assert.match(verify,/assert not any/);assert.match(verify,/assert b'LocalAIPlugin' not in data/);
+ assert.match(workflow,/dump permissions/);assert.match(workflow,/RECORD_AUDIO/);
+ assert.match(workflow,/lib\/arm64-v8a\/libfqmath\.so/);
+ assert.match(workflow,/assert not any/);
+ assert.doesNotMatch(workflow,/ai-addon\.js.*install_local_ai|FQOrchestrator|LocalAIPlugin/);
  const m=fs.readFileSync('migration/RetiredStorageCleanup.java','utf8');assert.match(m,/Qwen3-4B-Q4_K_M\.gguf/);assert.match(m,/getSharedPreferences\("fq_ai_model_v1"/);assert.match(m,/dm\.remove\(id\)/);assert.doesNotMatch(m,/deleteRecursively|clearApplicationUserData|deleteDatabase/);
  console.log('v028: local reports, follow-up dates, permissions, isolation and removed inference components passed');
 

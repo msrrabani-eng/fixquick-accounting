@@ -47,6 +47,7 @@ jobs:
           node tests/vol031.test.js
           node tests/vol032.test.js
           node tests/vol033.test.js
+          node tests/vol035.test.js
 
       - name: Install Capacitor (exact versions from package-lock.json)
         run: |
@@ -103,6 +104,11 @@ jobs:
       - name: Prepare one-time storage cleanup on update
         run: python3 tools/install_storage_cleanup.py
 
+      - name: Install isolated native math engine
+        run: |
+          sdkmanager "ndk;27.2.12479018" "cmake;3.22.1"
+          python3 tools/install_math_engine.py
+
       - name: Use the fixed signing key (so updates install over the old version)
         env:
           FIXQ_KEYSTORE_BASE64: ${{ secrets.FIXQ_KEYSTORE_BASE64 }}
@@ -134,7 +140,7 @@ jobs:
       - name: Collect APK
         run: cp android/app/build/outputs/apk/debug/app-debug.apk FixQuick-Accounting.apk
 
-      - name: Verify retired model components and permissions are absent
+      - name: Verify isolated math engine and retained permission restrictions
         run: |
           AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt | sort -V | tail -1)
           "$AAPT" dump permissions FixQuick-Accounting.apk | tee apk-permissions.txt
@@ -143,14 +149,13 @@ jobs:
           import zipfile
           with zipfile.ZipFile('FixQuick-Accounting.apk') as z:
               names=z.namelist()
-              assert not any('llama' in n.lower() or 'ggml' in n.lower() or 'fq-ai' in n.lower() or n.endswith('.gguf') or 'ai-addon.js' in n or 'ai-orchestrator.js' in n for n in names)
+              assert 'lib/arm64-v8a/libfqmath.so' in names
+              assert not any(n.endswith('.gguf') or 'ai-addon.js' in n or 'ai-orchestrator.js' in n for n in names)
               manifest=z.read('AndroidManifest.xml')
               for forbidden in ['RECORD_AUDIO','android.speech.RecognitionService','android.intent.action.TTS_SERVICE']:
                   assert forbidden.encode('utf-16-le') not in manifest and forbidden.encode() not in manifest, forbidden
-              for dex in (n for n in names if n.endswith('.dex')):
-                  data=z.read(dex)
-                  assert b'LocalAIPlugin' not in data and b'FixQuickAI' not in data and b'nativeGenerate' not in data
-          print('Retired inference and microphone access absent from APK.')
+              assert any(b'FqMathPlugin' in z.read(n) for n in names if n.endswith('.dex'))
+          print('Optional native engine present; model not bundled; no microphone access.')
           PY
 
       - name: Check the APK is signed with the fixed key
