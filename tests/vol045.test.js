@@ -1,0 +1,16 @@
+'use strict';
+const assert=require('node:assert/strict'),C=require('../www/core.js'),G=require('../www/smartguard.js'),fs=require('node:fs');
+const st=C.emptyState(),day='2026-11-09';C.migrate(st);
+const p=C.addPerson(st,{name:'شخص نمونه'}).person,acct=st.accounts.find(x=>x.kind==='cash').id;
+st.tx.push({id:1929,type:'payment',personId:p.id,date:day,amount:2000000000,acct,kind:'debit'},{id:1930,type:'payment',personId:p.id,date:day,amount:2000000000,acct,kind:'debit'});
+st.seq=2000;st.docNo={k:Array.from({length:270},(_,i)=>'test'+i).concat('tx1929','tx1930','chq1950|2026-11-09','chq1950|2026-11-10','mix1960','vch1970').join(' '),w:1970};
+st.cheques.push({id:1950,cyc:true,serial:'123456',direction:'receive',bank:'بانک',personId:p.id,hist:[]});
+const before=JSON.stringify(st),q=G.scan(st,{today:day}).items.find(x=>x.code==='duplicate-tx');
+assert.deepEqual(q.refs,[{kind:'tx',id:1929},{kind:'tx',id:1930}]);assert.doesNotMatch(q.message,/1929|1930/);
+assert.deepEqual(C.savedDocNumbers(st,'tx',1929),[271]);assert.deepEqual(C.savedDocNumbers(st,'tx',1930),[272]);assert.deepEqual(C.savedDocNumbers(st,'chq',1950),[273,274]);assert.deepEqual(C.savedDocNumbers(st,'mix',1960),[275]);assert.deepEqual(C.savedDocNumbers(st,'vch',1970),[276]);assert.deepEqual(C.savedDocNumbers(st,'tx',9999),[]);
+assert.equal(JSON.stringify(st),before,'scan and label lookup must not modify the backup');
+const pre=G.preflight(st,'tx',{personId:p.id,type:'payment',date:day,amount:2000000000,acct},{today:day});assert.equal(pre.find(x=>x.code==='duplicate-tx').refs.length,2);
+const r=fs.readFileSync('www/safety-ui.js','utf8');assert.match(r,/riskCard\(i\)/);assert.match(r,/Core\.audit\(S,true\)/);assert.match(r,/function openRiskSource/);assert.match(r,/بررسی کردم؛ ثبت شود/);
+const led=fs.readFileSync('www/ledger.js','utf8');assert.match(led,/exactNo/);assert.match(led,/savedDocCaption\('vch',v.id\)/);
+const mixed=fs.readFileSync('www/mixed-ui.js','utf8');assert.doesNotMatch(mixed,/\+' #'\+m\.id|sheet\('سند ترکیبی '\+fa\(m\.id\)/);
+console.log('v045: duplicate reference mapping 271/272, cheque multiple documents, no number assignment, source navigation and labels');

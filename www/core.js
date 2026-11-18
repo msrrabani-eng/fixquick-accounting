@@ -2126,6 +2126,28 @@
   const noMap = st => { const k = (st.docNo && typeof st.docNo.k === 'string') ? st.docNo.k : ''; if (noCache.k !== k) { const m = new Map(); if (k) k.split(' ').forEach((x, i) => m.set(x, i + 1)); noCache = { k, m }; } return noCache.m; };
   const applyNos = (st, D) => { const m = noMap(st); D.forEach(d => { d.no = m.get(noKey(d)) || 0; }); return D; };
   Core.docNoCount = st => noMap(st).size;
+  // Read existing numbers only. Never allocate a number, change a transaction or expose an internal ID as a document number.
+  Core.sourceDocRefs = function(st,kind,id){
+    id=Number(id);if(!Number.isSafeInteger(id)||id<=0)return [];
+    if(kind==='tx'){
+      const t=byId(st.tx||[],id);if(!t)return [];
+      if(t.mix)return [{mix:t.mix}];
+      if(t.type==='invoice'&&t.ref)return [{inv:t.ref}];
+      if(t.type==='voucher'&&t.vch)return [{vch:t.vch}];
+      if(t.type==='chq'&&t.chq)return Core.sourceDocRefs(st,'chq',t.chq);
+      if(t.type==='transfer'&&t.group){const dr=(st.tx||[]).find(x=>x.type==='transfer'&&x.group===t.group&&x.kind==='debit');if(dr)return [{tx:dr.id}];}
+    }
+    if(kind==='chq'){const c=byId(st.cheques||[],id);if(!c)return [];if(c.mix)return [{mix:c.mix},{chq:id}];if(!c.cyc&&c.txId){const t=byId(st.tx||[],c.txId);if(t&&t.type!=='chq')return Core.sourceDocRefs(st,'tx',c.txId);}}
+    return ['tx','inv','exp','chq','vch','xfer','adj','mix','acct'].includes(kind)?[{[kind]:id}]:[];
+  };
+  Core.savedDocNumbers=function(st,kind,id){
+    const map=noMap(st),nums=new Set();
+    for(const r of Core.sourceDocRefs(st,kind,id)){
+      const k=refKey(r);if(r.chq){for(const [key,no] of map)if(key.startsWith(k+'|'))nums.add(no);}
+      else if(map.has(k))nums.add(map.get(k));
+    }
+    return [...nums].sort((a,b)=>a-b);
+  };
   Core.assignDocNos = function (st, D) {
     const miss = D.filter(d => !d.no); if (!miss.length) return 0;
     const m = noMap(st), idOf = d => +(/\d+/.exec(d.key.split('|')[0]) || [0])[0], id = new Map(miss.map(d => [d, idOf(d)])), add = [];
@@ -2654,36 +2676,36 @@
   }
 
   /* ───────────── integrity / backup ───────────── */
-  Core.audit = function (st) {
-    const p = [];
+  Core.audit = function (st, detailed=false) {
+    const p = [], add=(message,kind,id)=>p.push(detailed?{message,refs:kind?[{kind,id}]:[]}:message);
     const ids = new Set(); const all = [].concat(st.people, st.products, st.invoices, st.tx, st.expenses, st.cheques, st.adjusts, st.accounts || [], st.acctTx || [], st.recons || [], st.vouchers || [], st.whTx || [], st.warehouses || [], st.tafsil || [], st.combined || []);
     all.forEach(x => { if (!Number.isInteger(x.id)) p.push('شناسه نامعتبر'); else if (ids.has(x.id)) p.push('شناسه تکراری: ' + x.id); else ids.add(x.id); if (x.id >= st.seq) p.push('شمارنده شناسه عقب است'); });
     for(const m of st.combined||[]){
-      if(!['active','void'].includes(m.status)||!Array.isArray(m.rows)||!Number.isSafeInteger(m.total)||!Number.isSafeInteger(m.applied)||m.total-m.applied!==m.remaining||m.rows.reduce((n,r)=>n+r.amount,0)!==m.applied){p.push('سند ترکیبی نامعتبر: '+m.id);continue;}
-      if(m.status==='active')for(const row of m.rows){const item=row.txId?byId(st.tx,row.txId):byId(st.cheques,row.chequeId);if(!item||item.mix!==m.id||item.amount!==row.amount)p.push('جزء سند ترکیبی ناسازگار: '+m.id);}
+      if(!['active','void'].includes(m.status)||!Array.isArray(m.rows)||!Number.isSafeInteger(m.total)||!Number.isSafeInteger(m.applied)||m.total-m.applied!==m.remaining||m.rows.reduce((n,r)=>n+r.amount,0)!==m.applied){add('سند ترکیبی نامعتبر', 'mix',m.id);continue;}
+      if(m.status==='active')for(const row of m.rows){const item=row.txId?byId(st.tx,row.txId):byId(st.cheques,row.chequeId);if(!item||item.mix!==m.id||item.amount!==row.amount)add('جزء سند ترکیبی ناسازگار','mix',m.id);}
     }
-    st.tx.forEach(t => { if (!byId(st.people, t.personId)) p.push('تراکنش بدون شخص: ' + t.id); if (!(t.amount > 0)) p.push('مبلغ نامعتبر در تراکنش ' + t.id); if (t.kind !== 'debit' && t.kind !== 'credit') p.push('نوع نامعتبر در تراکنش ' + t.id); if (!Core.validIso(t.date)) p.push('تاریخ نامعتبر در تراکنش ' + t.id); if (t.ref && !byId(st.invoices, t.ref)) p.push('تراکنش یتیم فاکتور: ' + t.id); });
+    st.tx.forEach(t => { if (!byId(st.people, t.personId)) (detailed?add('تراکنش بدون شخص','tx',t.id):add('تراکنش بدون شخص: شناسه داخلی '+ t.id)); if (!(t.amount > 0)) (detailed?add('مبلغ نامعتبر در تراکنش','tx',t.id):add('مبلغ نامعتبر در تراکنش شناسه داخلی '+ t.id)); if (t.kind !== 'debit' && t.kind !== 'credit') (detailed?add('نوع نامعتبر در تراکنش','tx',t.id):add('نوع نامعتبر در تراکنش شناسه داخلی '+ t.id)); if (!Core.validIso(t.date)) (detailed?add('تاریخ نامعتبر در تراکنش','tx',t.id):add('تاریخ نامعتبر در تراکنش شناسه داخلی '+ t.id)); if (t.ref && !byId(st.invoices, t.ref)) (detailed?add('تراکنش یتیم فاکتور','tx',t.id):add('تراکنش یتیم فاکتور: شناسه داخلی '+ t.id)); });
     st.invoices.forEach(i => {
-      if (!byId(st.people, i.personId)) p.push('فاکتور بدون شخص: ' + i.no);
-      i.items.forEach(l => { if (!byId(st.products, l.productId)) p.push('قلم بدون کالا در فاکتور ' + i.no); });
+      if (!byId(st.people, i.personId)) add('فاکتور بدون شخص: ' + i.no,'inv',i.id);
+      i.items.forEach(l => { if (!byId(st.products, l.productId)) add('قلم بدون کالا در فاکتور ' + i.no,'inv',i.id); });
       const main = (txByRef(st).get(i.id) || []).filter(t => t.type === 'invoice'); const tot = Core.invoiceTotals(i).total;
-      if (main.length !== 1 || main[0].amount !== tot) p.push('عدم تطابق حساب با فاکتور ' + i.no);
+      if (main.length !== 1 || main[0].amount !== tot) add('عدم تطابق حساب با فاکتور ' + i.no,'inv',i.id);
     });
     Core.replay(st).errors.forEach(e => p.push('موجودی منفی: ' + stockErrText(st, e)));
-    (st.vouchers || []).forEach(v => { const dr = v.lines.reduce((t, l) => t + l.dr, 0), cr = v.lines.reduce((t, l) => t + l.cr, 0); if (dr !== cr) p.push('سند ' + v.no + ' تراز نیست'); if (!Core.validIso(v.date)) p.push('تاریخ نامعتبر در سند ' + v.no); v.lines.forEach(l => { if (l.acc[0] === 'P' && !byId(st.people, +l.acc.slice(1))) p.push('سند ' + v.no + ' با شخص نامعتبر'); const m = /^110[12]:(\d+)$/.exec(l.acc); if (m && !byId(st.accounts || [], +m[1])) p.push('سند ' + v.no + ' با حساب نامعتبر'); }); });
-    st.tx.forEach(t => { if (t.type === 'voucher' && !byId(st.vouchers || [], t.vch)) p.push('ردیف بدون سند: ' + t.id); if (t.type === 'chq' && !byId(st.cheques, t.chq)) p.push('ردیف بدون چک: ' + t.id); });
+    (st.vouchers || []).forEach(v => { const dr = v.lines.reduce((t, l) => t + l.dr, 0), cr = v.lines.reduce((t, l) => t + l.cr, 0); if (dr !== cr) add('سند دستی/عملیات سال مالی تراز نیست' + (detailed?'':'؛ شماره داخلی سند دستی '+v.no),'vch',v.id); if (!Core.validIso(v.date)) add('تاریخ نامعتبر در سند دستی/عملیات سال مالی' + (detailed?'':'؛ شماره داخلی سند دستی '+v.no),'vch',v.id); v.lines.forEach(l => { if (l.acc[0] === 'P' && !byId(st.people, +l.acc.slice(1))) add('سند دستی/عملیات سال مالی با شخص نامعتبر' + (detailed?'':'؛ شماره داخلی سند دستی '+v.no),'vch',v.id); const m = /^110[12]:(\d+)$/.exec(l.acc); if (m && !byId(st.accounts || [], +m[1])) add('سند دستی/عملیات سال مالی با حساب نامعتبر' + (detailed?'':'؛ شماره داخلی سند دستی '+v.no),'vch',v.id); }); });
+    st.tx.forEach(t => { if (t.type === 'voucher' && !byId(st.vouchers || [], t.vch)) (detailed?add('ردیف بدون سند','tx',t.id):add('ردیف بدون سند: شناسه داخلی '+ t.id)); if (t.type === 'chq' && !byId(st.cheques, t.chq)) (detailed?add('ردیف بدون چک','tx',t.id):add('ردیف بدون چک: شناسه داخلی '+ t.id)); });
     st.cheques.forEach(c => {
       if (!c.cyc) {
-        if (c.txId && !byId(st.tx, c.txId)) p.push('چک قدیمی بدون تراکنش مرتبط: ' + c.id);
+        if (c.txId && !byId(st.tx, c.txId)) (detailed?add('چک قدیمی بدون تراکنش مرتبط','chq',c.id):add('چک قدیمی بدون تراکنش مرتبط: شناسه داخلی '+ c.id));
         return;
       }
-      if (c.invoiceId) { const inv = byId(st.invoices, c.invoiceId); if (!inv || inv.personId !== c.personId) p.push('چک با فاکتور نامعتبر: ' + c.id); }
-      if (!byId(st.people, c.personId)) p.push('چک بدون شخص: ' + c.id); if (!Array.isArray(c.hist) || !c.hist.length) p.push('چک بدون سابقه: ' + c.id); else c.hist.forEach(h => { if ((h.s === 'cleared' || h.s === 'bank') && !byId(st.accounts || [], h.acct)) p.push('چک با حساب نامعتبر: ' + c.id); if (h.s === 'spent' && !byId(st.people, h.to)) p.push('چک خرج‌شده بدون شخص: ' + c.id); }); if (c.direction === 'pay' && !byId(st.accounts || [], c.acct)) p.push('چک صادره بدون حساب: ' + c.id); });
-    if (st.warehouses) { const has = id => byId(st.warehouses, id); st.invoices.forEach(i => { if (i.wh != null && !has(i.wh)) p.push('فاکتور با انبار نامعتبر: ' + i.no); }); st.adjusts.forEach(a => { if (a.wh != null && !has(a.wh)) p.push('تعدیل با انبار نامعتبر: ' + a.id); }); (st.whTx || []).forEach(x => { if (!has(x.from) || !has(x.to)) p.push('انتقال انبار با انبار نامعتبر: ' + x.no); }); whReplay(st).errors.forEach(e => p.push('موجودی منفی انبار: ' + whErrText(st, e))); }
-    if (st.accounts) { st.tx.forEach(t => { if (t.acct != null && !byId(st.accounts, t.acct)) p.push('تراکنش با حساب نامعتبر: ' + t.id); }); st.expenses.forEach(e => { if (e.acct != null && !byId(st.accounts, e.acct)) p.push('هزینه با حساب نامعتبر: ' + e.id); }); (st.acctTx || []).forEach(x => { if (!byId(st.accounts, x.from) || !byId(st.accounts, x.to)) p.push('انتقال با حساب نامعتبر: ' + x.id); }); }
+      if (c.invoiceId) { const inv = byId(st.invoices, c.invoiceId); if (!inv || inv.personId !== c.personId) (detailed?add('چک با فاکتور نامعتبر','chq',c.id):add('چک با فاکتور نامعتبر: شناسه داخلی '+ c.id)); }
+      if (!byId(st.people, c.personId)) (detailed?add('چک بدون شخص','chq',c.id):add('چک بدون شخص: شناسه داخلی '+ c.id)); if (!Array.isArray(c.hist) || !c.hist.length) (detailed?add('چک بدون سابقه','chq',c.id):add('چک بدون سابقه: شناسه داخلی '+ c.id)); else c.hist.forEach(h => { if ((h.s === 'cleared' || h.s === 'bank') && !byId(st.accounts || [], h.acct)) (detailed?add('چک با حساب نامعتبر','chq',c.id):add('چک با حساب نامعتبر: شناسه داخلی '+ c.id)); if (h.s === 'spent' && !byId(st.people, h.to)) (detailed?add('چک خرج‌شده بدون شخص','chq',c.id):add('چک خرج‌شده بدون شخص: شناسه داخلی '+ c.id)); }); if (c.direction === 'pay' && !byId(st.accounts || [], c.acct)) (detailed?add('چک صادره بدون حساب','chq',c.id):add('چک صادره بدون حساب: شناسه داخلی '+ c.id)); });
+    if (st.warehouses) { const has = id => byId(st.warehouses, id); st.invoices.forEach(i => { if (i.wh != null && !has(i.wh)) add('فاکتور با انبار نامعتبر: ' + i.no,'inv',i.id); }); st.adjusts.forEach(a => { if (a.wh != null && !has(a.wh)) (detailed?add('تعدیل با انبار نامعتبر','adj',a.id):add('تعدیل با انبار نامعتبر: شناسه داخلی '+ a.id)); }); (st.whTx || []).forEach(x => { if (!has(x.from) || !has(x.to)) add('انتقال انبار با انبار نامعتبر: ' + x.no,'wh',x.id); }); whReplay(st).errors.forEach(e => p.push('موجودی منفی انبار: ' + whErrText(st, e))); }
+    if (st.accounts) { st.tx.forEach(t => { if (t.acct != null && !byId(st.accounts, t.acct)) (detailed?add('تراکنش با حساب نامعتبر','tx',t.id):add('تراکنش با حساب نامعتبر: شناسه داخلی '+ t.id)); }); st.expenses.forEach(e => { if (e.acct != null && !byId(st.accounts, e.acct)) (detailed?add('هزینه با حساب نامعتبر','exp',e.id):add('هزینه با حساب نامعتبر: شناسه داخلی '+ e.id)); }); (st.acctTx || []).forEach(x => { if (!byId(st.accounts, x.from) || !byId(st.accounts, x.to)) (detailed?add('انتقال با حساب نامعتبر','xfer',x.id):add('انتقال با حساب نامعتبر: شناسه داخلی '+ x.id)); }); }
     // An unbalanced journal is a serious integrity fault; include it in the audit.
-    for (const e of Core.journal(st)) { const d = e.lines.reduce((a, x) => a + x.dr, 0), c = e.lines.reduce((a, x) => a + x.cr, 0); if (d !== c) p.push('سند نامتوازن در تاریخ ' + e.date + ': ' + e.desc); }
-    return p;
+    for (const e of Core.journal(st)) { const d = e.lines.reduce((a, x) => a + x.dr, 0), c = e.lines.reduce((a, x) => a + x.cr, 0); if (d !== c) add('سند نامتوازن در تاریخ ' + e.date + ': ' + e.desc,Object.keys(e.ref||{})[0],Object.values(e.ref||{})[0]); }
+    return detailed?p.map(x=>typeof x==='string'?{message:x,refs:[]}:x):p;
   };
   // "start fresh": clears documents but never people or products. o: { invoices, adjusts, people, expenses, cheques }
   // returns a new state (the original is untouched) or an error when the result would be inconsistent (e.g. sales left without stock)

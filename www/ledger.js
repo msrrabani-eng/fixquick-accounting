@@ -74,15 +74,15 @@ function voucherForm(v, copy) {
 }
 function voucherView(id) {
   const v = Core.byId(S.vouchers || [], id); if (!v) return toast('سند پیدا نشد.', true); const t = vSum(v.lines);
-  const sh = sheet('سند حسابداری شماره ' + fa(v.no), '<div class="kv"><span>تاریخ</span><b>' + fmtDate(v.date) + '</b></div><div class="kv"><span>نوع</span><b>' + FY_DOC(v) + '</b></div>' + (v.desc ? '<p class="hint">' + esc(v.desc) + '</p>' : '') +
+  const sh = sheet(savedDocCaption('vch',v.id), '<div class="kv"><span>شماره ثبت دستی</span><b>'+fa(v.no)+'</b><span>تاریخ</span><b>' + fmtDate(v.date) + '</b></div><div class="kv"><span>نوع</span><b>' + FY_DOC(v) + '</b></div>' + (v.desc ? '<p class="hint">' + esc(v.desc) + '</p>' : '') +
     '<div class="card flush vlines"><div class="vlh"><span>حساب</span><span>بدهکار</span><span>بستانکار</span></div>' + v.lines.map(l => '<div class="vl"><span><b>' + esc(Core.accName(S, l.acc)) + '</b><small>' + fa(Core.keyCode(l.acc, 1)) + (l.note ? ' · ' + esc(l.note) : '') + (l.rec ? ' · ✓ تطبیق با بانک' : '') + '</small></span><em>' + (l.dr ? fmt(l.dr) : '') + '</em><em>' + (l.cr ? fmt(l.cr) : '') + '</em></div>').join('') + '<div class="vl tot"><span><b>جمع</b></span><em>' + fmt(t.dr) + '</em><em>' + fmt(t.cr) + '</em></div></div>' +
     (v.kind === 'manual' ? '<div class="row2"><button class="btn blue" data-e>' + ico('edit') + 'ویرایش</button><button class="btn ghost" data-c>' + ico('file') + 'کپی به سند جدید</button></div><button class="btn ghost red" data-d>حذف سند</button>' : '<p class="hint">این سند هنگام بستن سال مالی خودکار ساخته شده و فقط با «برگرداندن بستن سال» حذف می‌شود.</p>') +
     '<button class="btn ghost" data-s>' + ico('share') + 'ارسال متن سند</button>');
   const q = s => sh.q(s);
   if (q('[data-e]')) q('[data-e]').onclick = () => { sh.close(); voucherForm(v); };
   if (q('[data-c]')) q('[data-c]').onclick = () => { sh.close(); voucherForm(v, true); };
-  if (q('[data-d]')) q('[data-d]').onclick = async () => { if (!(await confirmBox('سند ' + fa(v.no) + ' حذف شود؟ اثر آن از حساب اشخاص، صندوق و بانک و گزارش‌ها برداشته می‌شود.', 'حذف', true))) return; if (await done(Core.deleteVoucher(S, v.id), 'سند حذف شد.')) sh.close(); };
-  q('[data-s]').onclick = () => shareText(['سند حسابداری شماره ' + fa(v.no) + ' — ' + fmtDate(v.date), v.desc || ''].concat(v.lines.map(l => Core.accName(S, l.acc) + ': ' + (l.dr ? 'بدهکار ' + fmt(l.dr) : 'بستانکار ' + fmt(l.cr)))).concat(['جمع: ' + fmt(t.dr)]).filter(Boolean).join('\n'), 'سند ' + v.no);
+  if (q('[data-d]')) q('[data-d]').onclick = async () => { if (!(await confirmBox(savedDocCaption('vch',v.id) + ' حذف شود؟ اثر آن از حساب اشخاص، صندوق و بانک و گزارش‌ها برداشته می‌شود.', 'حذف', true))) return; if (await done(Core.deleteVoucher(S, v.id), 'سند حذف شد.')) sh.close(); };
+  q('[data-s]').onclick = () => shareText([savedDocCaption('vch',v.id) + ' · شماره ثبت دستی '+fa(v.no)+' — ' + fmtDate(v.date), v.desc || ''].concat(v.lines.map(l => Core.accName(S, l.acc) + ': ' + (l.dr ? 'بدهکار ' + fmt(l.dr) : 'بستانکار ' + fmt(l.cr)))).concat(['جمع: ' + fmt(t.dr)]).filter(Boolean).join('\n'), savedDocCaption('vch',v.id));
 }
 /* ═════════════ accounting documents: every document the app has posted, plus manual vouchers ═════════════ */
 const DOC_F = [['all', 'همه'], ['sale', 'فروش'], ['purchase', 'خرید'], ['money', 'دریافت و پرداخت'], ['cheque', 'چک'], ['expense', 'هزینه'], ['voucher', 'سند دستی'], ['other', 'سایر']];
@@ -135,12 +135,13 @@ function docView(d) {
 }
 function pageVouchers() {
   const f = DOC_IN[UI.docF] ? UI.docF : 'all', c = docsAll(), q = Core.docQuery(UI.docQ || ''), lim = UI.limDoc || 60;
+  const exactNo=/^(?:شماره\s+)?سند(?:\s+حسابداری)?\s+(\d+)$/.exec(Core.toEn(UI.docQ||'').trim());
   const rg = rangeOf('doc');
   let h = tipBox('voucher') + sbox('doc-q', 'docQ', 'جستجو در همه اسناد: نام، شرح، مبلغ، شماره، کالا، تاریخ…', UI.docQ || '') + rangeBar('doc') + chips('docF', f, DOC_F);
   const want = f === 'all' ? null : new Set(DOC_IN[f]); let idx = [];
   const DS = DOC_SORT.some(x => x[0] === UI.docSort) ? UI.docSort : 'new'; h += sortSel('docSort', DS, DOC_SORT);
   for (let i = 0; i < c.docs.length; i++) { const d = c.docs[i]; if ((!want || want.has(d.kind)) && (!rg.on || (d.date !== '0000-00-00' && (!rg.from || d.date >= rg.from) && (!rg.to || d.date <= rg.to)))) idx.push(i); }
-  if (q.length) { if (!docTextsReady(c)) return { title: 'اسناد حسابداری', html: h + '<div class="card"><p class="hint center">در حال آماده‌سازی جستجو در ' + fa(c.docs.length) + ' سند… <b id="doc-prog"></b></p></div>', fab: ['vchNew', '+'], back: UI.docHome?'#/home':'#/more' }; idx = idx.filter(i => Core.docMatch(c.texts[i], q)); }
+  if(exactNo){idx=idx.filter(i=>c.docs[i].no===Number(exactNo[1]));}else if (q.length) { if (!docTextsReady(c)) return { title: 'اسناد حسابداری', html: h + '<div class="card"><p class="hint center">در حال آماده‌سازی جستجو در ' + fa(c.docs.length) + ' سند… <b id="doc-prog"></b></p></div>', fab: ['vchNew', '+'], back: UI.docHome?'#/home':'#/more' }; idx = idx.filter(i => Core.docMatch(c.texts[i], q)); }
   if (DS !== 'new') { const D = c.docs; idx.sort({ old: (a, b) => b - a, amt_desc: (a, b) => D[b].dr - D[a].dr || a - b, amt_asc: (a, b) => D[a].dr - D[b].dr || a - b, no_desc: (a, b) => D[b].no - D[a].no, no_asc: (a, b) => D[a].no - D[b].no }[DS]); }
   h += idx.length ? '<p class="hint">' + fa(idx.length) + ' سند' + (rg.on ? ' در این بازه' : '') + (q.length ? ' پیدا شد' : '') + '</p><div class="card flush">' + idx.slice(0, lim).map(i => docRow(c.docs[i])).join('') + '</div>' + moreBtn('limDoc', Math.min(lim, idx.length), idx.length)
     : q.length ? (f !== 'all' && c.texts.some(x => Core.docMatch(x, q)) ? '<div class="card"><p class="hint">در بخش «' + DOC_F.find(x => x[0] === f)[1] + '» پیدا نشد، ولی در اسناد دیگر هست.</p><button class="btn blue" data-act="chip" data-k="docF" data-v="all">نمایش در همه اسناد</button></div>' : empty(ico('search'), 'سندی با این کلمه یا عدد پیدا نشد.')) : f === 'voucher' ? empty(ico('file'), 'هنوز سند دستی ثبت نشده است. اسناد خرید و فروش، دریافت و پرداخت و هزینه‌ها خودکار ثبت می‌شوند؛ سند دستی برای موارد خاص است (وام، سرمایه، اصلاح حساب، …).', '<button class="btn blue" data-act="vchNew">+ سند جدید</button>') : empty(ico('file'), 'سندی در این بخش نیست.');
