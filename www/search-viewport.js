@@ -70,9 +70,19 @@
   const main=document.querySelector('#main'),sheet=input?.closest('.sheet-wrap');
   if(main)main.classList.toggle('fq-search-active',!!input&&!sheet&&main.contains(input));
   document.querySelectorAll('.sheet-wrap').forEach(w=>w.classList.toggle('fq-search-active',w===sheet));
-  if(input){const box=input.closest('.sbox,.gs,.ui2-search-row')||input,scroll=sheet?.querySelector('.sheet-b')||main;
-   if(scroll){const a=box.getBoundingClientRect(),b=scroll.getBoundingClientRect();if(a.top<b.top||a.bottom>b.bottom)scroll.scrollTop+=a.top-b.top-6;}
+  if(input){const box=input.closest('.ui2-search-row')||input.closest('.sbox,.gs')||input,scroll=sheet?.querySelector('.sheet-b')||main;
+   if(scroll){const a=box.getBoundingClientRect(),b=scroll.getBoundingClientRect();if(a.top<b.top+6)scroll.scrollTop+=a.top-b.top-6;else if(a.bottom>b.bottom-6)scroll.scrollTop+=a.bottom-b.bottom+6;}
   }
+  // Ordinary data entry also needs viewport bounds, but must not inherit search filtering or Enter handling.
+  const field=!input&&el?.matches?.('input:not([type=hidden]):not([type=checkbox]):not([type=radio]):not([type=button]):not([type=file]),textarea')?el:null;
+  const fs=field?.closest('.sheet-wrap');
+  body.classList.toggle('fq-form-focus',!!field);
+  if(field){body.style.setProperty('--fq-form-height',Math.round(height)+'px');body.style.setProperty('--fq-form-top',Math.max(0,Math.round(v?.offsetTop||0))+'px');}
+  else{body.style.removeProperty('--fq-form-height');body.style.removeProperty('--fq-form-top');}
+  if(main)main.classList.toggle('fq-form-editing',!!field&&!fs&&main.contains(field));
+  document.querySelectorAll('.sheet-wrap').forEach(w=>w.classList.toggle('fq-form-active',w===fs));
+  const sc=fs?.querySelector('.sheet-b')||main;
+  if(field&&sc&&sc.contains(field)){const a=field.getBoundingClientRect(),b=sc.getBoundingClientRect();if(a.top<b.top+6)sc.scrollTop+=a.top-b.top-6;else if(a.bottom>b.bottom-8)sc.scrollTop+=a.bottom-b.bottom+8;}
  }
  function schedule(){clearTimeout(timer);timer=setTimeout(sync,40);}
  window.refreshSearchViewport=sync;

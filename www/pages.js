@@ -286,7 +286,7 @@ function rangeSheet(key) {
   sh.q('#rg').onsubmit = e => { e.preventDefault(); apply(readDate(sh.q('#rg'), 'rgf'), readDate(sh.q('#rg'), 'rgt')); };
 }
 // search box with a × that clears it in one tap
-function sbox(id, key, ph, val) { return '<div class="pwrap sbox"><input class="inp" id="' + id + '" placeholder="' + ph + '" value="' + esc(val || '') + '" autocomplete="off" data-search-field><button type="button" class="pclr" data-act="clrQ" data-k="' + key + '" data-id="' + id + '" aria-label="پاک‌کردن جستجو">' + ico('x') + '</button></div>'; }
+function sbox(id, key, ph, val) { return '<div class="pwrap sbox"><input class="inp" id="' + id + '" placeholder="' + ph + '" value="' + esc(val || '') + '" autocomplete="off" data-search-field><button type="button" class="pclr" data-act="clrQ" data-k="' + key + '" data-id="' + id + '" aria-label="پاک‌کردن جستجو"' + (val ? '' : ' hidden') + '>' + ico('x') + '</button></div>'; }
 // date range for a person's statement; the same range is used on the page and in the PDF
 function stmtSheet(pid) {
   const sh = sheet('بازه صورت‌حساب', '<form id="sr">' + dateField('f', UI.stmtFrom || Core.periodRange('month').from, 'از تاریخ') + dateField('t', UI.stmtTo || today(), 'تا تاریخ') + '<div class="row2"><button class="btn ghost" type="button" id="sr-ok">اعمال روی صفحه</button><button class="btn blue" type="button" id="sr-pdf">' + ico('file') + 'ساخت PDF</button></div><p class="hint">PDF همین بازه را می‌سازد. برای همه تراکنش‌ها، تاریخ اول را خیلی قدیمی بگذارید.</p></form>');
@@ -863,7 +863,7 @@ const actions = {
   stmtRange: d => stmtSheet(+d.p || 0),
   stmtClear: () => { UI.stmtFrom = UI.stmtTo = null; render(); },
   rangeSet: d => rangeSheet(d.k), rangeClr: d => { UI[d.k + 'From'] = UI[d.k + 'To'] = null; const l = RANGE_LIM[d.k]; if (l) UI[l[0]] = l[1]; render(); },
-  clrQ: d => { const lim = { peopleQ: ['limPeople', 150], invQ: ['limInv', 100], prodQ: ['limProd', 100], docQ: ['limDoc', 60] }[d.k]; if (!lim) return; UI[d.k] = ''; UI[lim[0]] = lim[1]; clearTimeout(searchT); const i0 = $('#' + d.id); if (i0) i0.value = ''; render({ keepId: d.id }); const i = $('#' + d.id); if (i) i.focus(); },
+  clrQ: d => { const lim = { peopleQ: ['limPeople', 150], invQ: ['limInv', 100], prodQ: ['limProd', 100], docQ: ['limDoc', 60], expenseQ: ['limExp', 150], chqQ: ['limChq', 150], acctQ: ['limAcct', 150] }[d.k]; if (!lim) return; UI[d.k] = ''; UI[lim[0]] = lim[1]; clearTimeout(searchT); const i0 = $('#' + d.id); if (i0) {i0.value = '';ui43SearchClear(i0);} render({ keepId: d.id }); const i = $('#' + d.id); if (i) i.focus(); },
   shareStmt: d => shareText(Core.statementText(S, +d.p, UI.stmtFrom, UI.stmtTo)),
   csvStmt: async d => { const L = Core.ledger(S, +d.p, UI.stmtFrom, UI.stmtTo); await exportFile('statement-' + stamp() + '.csv', csvFile([['تاریخ', 'شرح', 'اضافه (' + UNIT() + ')', 'کم (' + UNIT() + ')', 'مانده (' + UNIT() + ')']].concat(L.rows.map(r => [Core.isoToJalali(r.tx.date), r.tx.desc, r.debit ? Core.shown(r.debit) : '', r.credit ? Core.shown(r.credit) : '', Core.shown(r.balance)]))), 'text/csv'); },
   newInv: d => { if (!gate()) return; const q = d.p ? '?p=' + d.p : ''; const h = '#/new/' + (d.t || 'sale') + q; goHash(h); },
@@ -1040,7 +1040,7 @@ document.addEventListener('click', e => {
 });
 let lastSearchMs = 0, searchT;
 document.addEventListener('input', e => {
-  const i = e.target; const m = { 'people-q': 'peopleQ', 'inv-q': 'invQ', 'prod-q': 'prodQ', 'expense-q': 'expenseQ', 'chq-q': 'chqQ', 'acct-q': 'acctQ', 'gs-q': 'searchQ', 'rep-pq': 'repPQ', 'doc-q': 'docQ' }[i.id]; if (!m) return; UI[m] = i.value; UI.limDoc = 60; UI.searchLim = 30; UI.limPeople = 150; UI.limInv = 100; UI.limProd = 100; clearTimeout(searchT); searchT = setTimeout(() => afterSearchTap(i, () => { if (!i.isConnected) return; const t0 = performance.now(); render({ keepId: i.id }); lastSearchMs = performance.now() - t0; }), i.id === 'gs-q' || lastSearchMs > 300 ? Math.min(1200, Math.max(i.id === 'gs-q' ? 250 : 180, lastSearchMs * 1.5)) : 180); // on a slow phone with a big file, wait a little longer so typing never piles up searches
+  const i = e.target; const m = { 'people-q': 'peopleQ', 'inv-q': 'invQ', 'prod-q': 'prodQ', 'expense-q': 'expenseQ', 'chq-q': 'chqQ', 'acct-q': 'acctQ', 'gs-q': 'searchQ', 'rep-pq': 'repPQ', 'doc-q': 'docQ' }[i.id]; if (!m) return; UI[m] = i.value; ui43SearchClear(i); UI.limExp = 150; UI.limChq = 150; UI.limAcct = 150; UI.limDoc = 60; UI.searchLim = 30; UI.limPeople = 150; UI.limInv = 100; UI.limProd = 100; clearTimeout(searchT); searchT = setTimeout(() => afterSearchTap(i, () => { if (!i.isConnected) return; const t0 = performance.now(); render({ keepId: i.id }); lastSearchMs = performance.now() - t0; }), i.id === 'gs-q' || lastSearchMs > 300 ? Math.min(1200, Math.max(i.id === 'gs-q' ? 250 : 180, lastSearchMs * 1.5)) : 180); // on a slow phone with a big file, wait a little longer so typing never piles up searches
 });
 let lastFull = '';
 window.addEventListener('hashchange', () => { if ((location.hash || '#/home') !== lastFull) render(); }); // ignore duplicate events for the same address (would wipe an open form)
