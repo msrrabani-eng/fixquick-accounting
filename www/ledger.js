@@ -125,8 +125,9 @@ function docCard(ref) {
   return '<div class="ch gs-h">' + ico('file') + 'سند حسابداری این فاکتور' + (D.length === 1 && D[0].no ? ' · شماره ' + fa(D[0].no) : '') + ' ' + help('doc') + '</div>' + docLines(D);
 }
 function docView(d) {
+  if(!routeAllowed('vouchers'))return;
   if (d.ref.vch) return voucherView(d.ref.vch);
-  const r = d.ref, src = r.mix ? ['mixedView',r.mix,'مشاهده سند ترکیبی'] : r.inv ? ['go', '#/inv/' + r.inv, 'مشاهده فاکتور'] : r.tx ? ['txOpen', r.tx, 'مشاهده دریافت / پرداخت'] : r.exp ? ['expOpen', r.exp, 'مشاهده هزینه'] : r.chq ? ['chqView', r.chq, 'مشاهده چک'] : r.xfer ? ['acctXferOpen', r.xfer, 'مشاهده انتقال وجه'] : null;
+  const r = d.ref, src = r.mix ? ['mixedView',r.mix,'باز کردن سند ترکیبی و عملیات آن'] : r.inv ? ['go', '#/inv/' + r.inv, 'باز کردن فاکتور و عملیات آن'] : r.tx ? ['txOpen', r.tx, 'باز کردن دریافت / پرداخت و عملیات آن'] : r.exp ? ['expOpen', r.exp, 'باز کردن هزینه و عملیات آن'] : r.chq ? ['chqView', r.chq, 'باز کردن چک و عملیات آن'] : r.xfer ? ['acctXferOpen', r.xfer, 'باز کردن انتقال وجه و عملیات آن'] : null;
   const sh = sheet((d.no ? 'سند حسابداری شماره ' + fa(d.no) : 'سند حسابداری') + ' · ' + Core.DOC_KIND[d.kind], '<div class="kv">' + (d.no ? '<span>شماره سند</span><b>' + fa(d.no) + '</b>' : '') + '<span>تاریخ</span><b>' + (d.date === '0000-00-00' ? 'اول دوره' : fmtDate(d.date)) + '</b><span>شرح</span><b>' + docTitle(d) + '</b></div>' + docLines([d]) +
     '<p class="hint">این سند خودکار از روی خود سند اصلی ساخته شده؛ برای تغییر، سند اصلی را ویرایش کنید.</p>' + (src ? '<button class="btn blue" data-src>' + esc(src[2]) + '</button>' : '') + '<button class="btn ghost" data-s>' + ico('share') + 'ارسال متن سند</button>');
   if (src) sh.q('[data-src]').onclick = () => { sh.close(); if (src[0] === 'go') goHash(src[1]); else actions[src[0]]({ id: String(src[1]) }); };
@@ -139,12 +140,12 @@ function pageVouchers() {
   const want = f === 'all' ? null : new Set(DOC_IN[f]); let idx = [];
   const DS = DOC_SORT.some(x => x[0] === UI.docSort) ? UI.docSort : 'new'; h += sortSel('docSort', DS, DOC_SORT);
   for (let i = 0; i < c.docs.length; i++) { const d = c.docs[i]; if ((!want || want.has(d.kind)) && (!rg.on || (d.date !== '0000-00-00' && (!rg.from || d.date >= rg.from) && (!rg.to || d.date <= rg.to)))) idx.push(i); }
-  if (q.length) { if (!docTextsReady(c)) return { title: 'اسناد حسابداری', html: h + '<div class="card"><p class="hint center">در حال آماده‌سازی جستجو در ' + fa(c.docs.length) + ' سند… <b id="doc-prog"></b></p></div>', fab: ['vchNew', '+'], back: '#/more' }; idx = idx.filter(i => Core.docMatch(c.texts[i], q)); }
+  if (q.length) { if (!docTextsReady(c)) return { title: 'اسناد حسابداری', html: h + '<div class="card"><p class="hint center">در حال آماده‌سازی جستجو در ' + fa(c.docs.length) + ' سند… <b id="doc-prog"></b></p></div>', fab: ['vchNew', '+'], back: UI.docHome?'#/home':'#/more' }; idx = idx.filter(i => Core.docMatch(c.texts[i], q)); }
   if (DS !== 'new') { const D = c.docs; idx.sort({ old: (a, b) => b - a, amt_desc: (a, b) => D[b].dr - D[a].dr || a - b, amt_asc: (a, b) => D[a].dr - D[b].dr || a - b, no_desc: (a, b) => D[b].no - D[a].no, no_asc: (a, b) => D[a].no - D[b].no }[DS]); }
   h += idx.length ? '<p class="hint">' + fa(idx.length) + ' سند' + (rg.on ? ' در این بازه' : '') + (q.length ? ' پیدا شد' : '') + '</p><div class="card flush">' + idx.slice(0, lim).map(i => docRow(c.docs[i])).join('') + '</div>' + moreBtn('limDoc', Math.min(lim, idx.length), idx.length)
     : q.length ? (f !== 'all' && c.texts.some(x => Core.docMatch(x, q)) ? '<div class="card"><p class="hint">در بخش «' + DOC_F.find(x => x[0] === f)[1] + '» پیدا نشد، ولی در اسناد دیگر هست.</p><button class="btn blue" data-act="chip" data-k="docF" data-v="all">نمایش در همه اسناد</button></div>' : empty(ico('search'), 'سندی با این کلمه یا عدد پیدا نشد.')) : f === 'voucher' ? empty(ico('file'), 'هنوز سند دستی ثبت نشده است. اسناد خرید و فروش، دریافت و پرداخت و هزینه‌ها خودکار ثبت می‌شوند؛ سند دستی برای موارد خاص است (وام، سرمایه، اصلاح حساب، …).', '<button class="btn blue" data-act="vchNew">+ سند جدید</button>') : empty(ico('file'), 'سندی در این بخش نیست.');
   h += '<div class="toolbar"><button class="btn ghost sm" data-act="go" data-h="#/reports/jr">' + ico('listplus') + 'دفتر روزنامه</button>' + (isAdmin() ? '<button class="btn ghost sm" data-act="go" data-h="#/coa">' + ico('file') + 'کدینگ حساب‌ها</button>' : '') + '</div>';
-  return { title: 'اسناد حسابداری', html: h, fab: ['vchNew', '+'], back: '#/more' };
+  return { title: 'اسناد حسابداری', html: h, fab: ['vchNew', '+'], back: UI.docHome?'#/home':'#/more' };
 }
 
 /* ═════════════ chart of accounts ═════════════ */
@@ -487,9 +488,9 @@ document.addEventListener('input', e => { if (e.target.id === 'wh-q') { const in
 
 const LEDGER_ACTIONS = {
   vchNew: () => { if (gate()) voucherForm(null); }, vchOpen: d => voucherView(+d.id),
-  docOpen: d => { const x = docsAll().docs.find(y => y.key === d.k); if (x) docView(x); else toast('سند پیدا نشد.', true); },
-  docGo: d => { UI.docF = d.f || 'all'; UI.docQ = ''; UI.limDoc = 60; goHash('#/vouchers'); },
-  docOf: d => { const D = docsOfSaved({ [d.k]: +d.id }); if (D.length === 1) docView(D[0]); else if (D.length) sheet('سند حسابداری', docLines(D)); else toast('سندی برای این مورد ثبت نشده است.', true); },
+  docOpen: d => { if(!routeAllowed('vouchers'))return; const x = docsAll().docs.find(y => y.key === d.k); if (x) docView(x); else toast('سند پیدا نشد.', true); },
+  docGo: d => { if(!routeAllowed('vouchers'))return; UI.docF = d.f || 'all'; UI.docQ = ''; UI.limDoc = 60; UI.docFrom=UI.docTo=null; UI.docHome=d.home==='1'; goHash('#/vouchers'); },
+  docOf: d => { if(!routeAllowed('vouchers'))return; const D = docsOfSaved({ [d.k]: +d.id }); if (D.length === 1) docView(D[0]); else if (D.length) sheet('سند حسابداری', docLines(D)); else toast('سندی برای این مورد ثبت نشده است.', true); },
   coaAdd: d => coaAddForm(d.l, d.k), coaRen: d => { const code = d.c, sh = sheet('تغییر نام حساب ' + fa(code), '<form id="crf"><label class="fld"><span>نام جدید</span><input class="inp" name="name" value="' + esc(Core.coaName(S, code)) + '"></label><button class="btn blue">ذخیره</button></form>'); sh.q('#crf').onsubmit = async e => { e.preventDefault(); if (await done(Core.renameCoa(S, code, e.target.name.value), 'نام حساب تغییر کرد.')) sh.close(); }; },
   coaDel: async d => { if (await confirmBox('حساب ' + fa(d.c) + ' («' + Core.coaName(S, d.c) + '») حذف شود؟', 'حذف', true)) await done(Core.deleteCoa(S, d.c), 'حذف شد.'); },
   tafNew: () => tafsilForm(null), tafEdit: d => tafsilForm(Core.byId(S.tafsil || [], +d.id)),

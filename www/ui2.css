@@ -171,3 +171,5 @@ body.fq-form-focus #main{padding-bottom:12px!important;min-height:0}
 #mix-add{min-height:44px}
 @media(max-width:360px){.mix-main-fields,.mix-core{grid-template-columns:minmax(0,1fr)}}
 @media(max-height:440px){.mix-sheet .sheet-h{padding:3px 9px}}
+
+.fq-home-docs{margin:0 0 9px;min-height:48px}.fq-update-notice{display:flex;align-items:center;justify-content:space-between;gap:7px;flex-wrap:wrap}.fq-update-download{display:flex;align-items:center;justify-content:center;text-align:center}.fq-update-notice b{overflow-wrap:anywhere}

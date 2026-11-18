@@ -31,6 +31,7 @@ function pageHome() {
   const small = [ [can('money'), 'quickTx', 'receipt', 'in', 'دریافت'], [can('money'), 'quickTx', 'payment', 'out', 'پرداخت'], [can('money') && feat('cheques'), 'addCheque', '', 'cheque', 'ثبت چک'], [can('money') && feat('cheques'), 'spendChequeHome', '', 'cheque', 'خرج چک'], [can('money') && feat('transfer'), 'transfer', '', 'transfer', 'حواله'], [can('money') && feat('expenses'), 'addExpense', '', 'wallet', 'هزینه'], [true, 'newInv', 'sale_return', 'ret', 'برگشتی']].filter(x => x[0]);
   const btn = (x, cls) => '<button class="hq2 ' + (cls || '') + '" data-act="' + x[1] + '"' + (x[2] ? ' data-t="' + x[2] + '"' : '') + '>' + ico(x[3]) + '<span>' + x[4] + '</span></button>';
   h += '<div class="hact">' + (big.length ? '<div class="hbig">' + big.map(x => btn(x, x[5])).join('') + '</div>' : '') + (small.length ? '<div class="hsmall">' + small.map(x => btn(x)).join('') + '</div>' : '') + '</div>';
+  if (routeAllowed('vouchers')) h += '<button class="btn ghost fq-home-docs" data-act="docGo" data-f="all" data-home="1">'+ico('file')+'اسناد ثبت‌شده</button>';
   const draftNames = { 'invoice:sale':'فاکتور فروش', 'invoice:purchase':'فاکتور خرید', 'invoice:sale_return':'برگشت از فروش', 'invoice:purchase_return':'برگشت از خرید', 'transfer:new':'حواله بین اشخاص', 'bank-transfer:new':'انتقال بین بانک و صندوق', 'cheque:new':'ثبت چک', 'cheque:legacy:new':'چک / قسط یادآور', 'expense:new':'ثبت هزینه', 'tx:receipt:new':'دریافت', 'tx:payment:new':'پرداخت', 'tx:manual:new':'تراکنش حساب', 'person:new':'ثبت شخص جدید', 'product:new':'ثبت کالای جدید', 'product:invoice:new':'کالای جدید داخل فاکتور', 'account:bank:new':'حساب بانکی جدید', 'account:cash:new':'صندوق جدید', 'voucher:new':'سند حسابداری جدید', 'warehouse-transfer:new':'حواله انتقال انبار', 'warehouse:new':'انبار جدید' };
   const drafts = Drafts.list().filter(x => (draftNames[x.kind] || x.kind.startsWith('invoice:edit:')) &&
     (!x.kind.startsWith('invoice:purchase') || can('purchase')) &&
@@ -738,7 +739,7 @@ function aboutCard() {
   const lnk=(ic,t,s,u)=>'<a class="fq-support-link" href="'+esc(u)+'" target="_blank" rel="noopener noreferrer"><i>'+ico(ic)+'</i><span><b>'+esc(t)+'</b><small dir="auto">'+esc(s)+'</small></span><em>‹</em></a>';
   return '<section class="card fq-support" dir="rtl"><header class="fq-support-head"><img src="logo.png" alt="لوگوی فیکس کوییک"><div><b>پشتیبانی فیکس کوییک</b><small>حسابداری فیکس کوییک · نسخه '+fa(APP_VER)+'</small></div></header><div class="fq-support-links">'+lnk('chat','واتساپ','09999917199',wa)+lnk('phone','تماس تلفنی','09999917199','tel:09999917199')+lnk('globe','وب‌سایت','fixq.ir','https://fixq.ir')+lnk('insta','اینستاگرام','@fixq.ir','https://instagram.com/fixq.ir')+'</div><div class="fq-support-actions">'+lnk('alert','گزارش مشکل','ارسال پیام در واتساپ',wa+'?text='+encodeURIComponent('سلام، گزارش مشکل حسابداری فیکس کوییک — نسخه '+APP_VER+': '))+lnk('chat','ارسال پیشنهاد','ارسال پیام در واتساپ',wa+'?text='+encodeURIComponent('سلام، پیشنهاد برای حسابداری فیکس کوییک: '))+'</div><footer class="fq-support-credit"><b>محمد صادق ربانی</b><small>طراح و صاحب امتیاز نرم‌افزار<br>حسابداری فیکس کوییک</small></footer></section>';
 }
-function pageSupport(){return {title:'پشتیبانی',html:aboutCard(),back:'#/more'};}
+function pageSupport(){return {title:'پشتیبانی',html:'<button class="btn ghost" data-act="go" data-h="#/updates">'+ico('refresh')+'بررسی به‌روزرسانی برنامه</button>'+aboutCard(),back:'#/more'};}
 function pageSettings(section) {
   if(section === 'backup' && !can('backup')) return {title:'دسترسی محدود',html:empty(ico('lock'),'برای پشتیبان‌گیری مجوز ندارید.'),back:'#/more'};
   const days = S.settings.lastBackup ? Core.diffDays(S.settings.lastBackup, today()) : null;
@@ -852,6 +853,7 @@ function setPin() {
 
 /* ─────────── actions ─────────── */
 const actions = {
+  rasOpen:()=>goHash('#/ras'), updatesOpen:()=>goHash('#/updates'),
   mixedChoose:d=>mixedChoose(+d.p||null),mixedView:d=>mixedView(+d.id),mixedInvPay:d=>{const i=Core.byId(S.invoices,+d.id);if(!i||!can('money'))return;mixedEditor({type:['sale','purchase_return'].includes(i.type)?'receipt':'payment',personId:i.personId,invoiceId:i.id,total:Core.invoiceInfo(S,i).remaining});},
   go: d => { goHash(d.h); },
   chip: d => { UI[d.k] = d.v; if (d.k === 'prodCat') UI.limProd = 100; if (d.k === 'repTab' || d.k === 'rep') UI.limRep = 60; if (d.k === 'rep' && d.v === 'custom' && !UI.repFrom) { UI.repFrom = Core.periodRange('month').from; UI.repTo = today(); } render(); },
@@ -971,11 +973,11 @@ function personFormInline() { // quick-add from invoice picker
 
 /* ─────────── router / shell ─────────── */
 const routes = {
-  summary: pageAccountSummary, support: pageSupport, mixed:pageMixed,
+  summary: pageAccountSummary, support: pageSupport, mixed:pageMixed, ras:pageRas, updates:pageUpdates,
   home: pageHome, people: pagePeople, person: pagePerson, invoices: pageInvoices, inv: pageInvoice, edit: (a) => { const i = Core.byId(S.invoices, +a); return i ? pageNewInvoice(i.type, { edit: i }) : { title: 'ویرایش', html: empty(ico('help'), 'فاکتور پیدا نشد.'), back: '#/invoices' }; }, new: (a) => pageNewInvoice(a, Object.fromEntries(new URLSearchParams((location.hash.split('?')[1]) || ''))),
   search: pageSearch, safety: pageSafety, products: pageProducts, stock: pageStock, kardex: pageKardex, cheques: pageCheques, expenses: pageExpenses, reports: pageReports, more: pageMore, settings: pageSettings, accounts: pageAccounts, acct: pageAcct, recon: pageRecon, vouchers: pageVouchers, coa: pageCoa, fiscal: pageFiscal, warehouses: pageWarehouses, wh: pageWh
 };
-const navMap = { mixed:'more', summary:'more', support:'more', safety: 'home', vouchers: 'more', coa: 'more', fiscal: 'more', warehouses: 'products', wh: 'products', search: 'home', home: 'home', people: 'people', person: 'people', invoices: 'invoices', inv: 'invoices', edit: 'invoices', new: 'invoices', products: 'products', stock: 'products', kardex: 'products', more: 'more', cheques: 'more', expenses: 'more', reports: 'more', settings: 'more', accounts: 'more', acct: 'more', recon: 'more' };
+const navMap = { ras:'more',updates:'more',mixed:'more', summary:'more', support:'more', safety: 'home', vouchers: 'more', coa: 'more', fiscal: 'more', warehouses: 'products', wh: 'products', search: 'home', home: 'home', people: 'people', person: 'people', invoices: 'invoices', inv: 'invoices', edit: 'invoices', new: 'invoices', products: 'products', stock: 'products', kardex: 'products', more: 'more', cheques: 'more', expenses: 'more', reports: 'more', settings: 'more', accounts: 'more', acct: 'more', recon: 'more' };
 let lastRoute = '';
 // update the page around a text box the user is typing in, without ever touching that box
 // (re-creating it drops letters on Android keyboards that are still composing a word)
@@ -1006,6 +1008,7 @@ function render(opt) {
   main.dataset.page = routeAllowed(page) ? page : 'restricted';
   if (res.mount) res.mount();
   ui2Mount(main, page);
+  if(typeof paintUpdateNotice==='function')paintUpdateNotice();
   if(typeof refreshSearchViewport==='function')refreshSearchViewport();
 }
 // what a sub-user may open / press
@@ -1016,6 +1019,7 @@ function routeAllowed(page) {
   if (isAdmin()) return true;
   const arg = (location.hash || '').split('?')[0].split('/')[2] || '';
   if(page==='mixed')return can('money');
+  if (page === 'ras') return can('reports');
   if (page === 'reports' || page === 'summary') return can('reports');
   if (page === 'accounts' || page === 'acct') return can('reports');
   if (page === 'recon') return can('reports') && can('money');
@@ -1320,6 +1324,7 @@ async function boot() {
   }
   try { await licCheck(); } catch (e) { /* ignore */ } render(); $('#splash').remove();
   authGate();
+  startUpdateChecks();
   try { const A = capApp(); if (A && A.addListener) A.addListener('backButton', onBackButton); } catch (e) { /* older build without the App plugin: Android's default back */ }
   if (DESK) window.fqDesktop.onClose(() => { if (lockedNow || !S.settings.auth) return window.fqDesktop.exit(); exitPrompt(); });
   // heavy background jobs are spread out, so the first seconds after opening stay responsive even with a very large file
