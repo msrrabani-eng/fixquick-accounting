@@ -15,8 +15,11 @@ assert.throws(()=>R.calculate(st,{from:'2026-02-01',to:'2026-01-01',type:'sale',
 const u=vm.createContext({module:{exports:{}},URL});vm.runInContext(fs.readFileSync('www/updates.js','utf8'),u);const U=u.module.exports;
 assert.equal(U.compare('1.100','1.99'),1);assert.equal(U.compare('1.2','1.2.0'),0);assert.throws(()=>U.compare('x','1.2'));
 const data={name:'Fix Quick Accounting 1.75 (build 66)',assets:[{name:'FixQuick-Accounting.apk',browser_download_url:'https://github.com/msrrabani-eng/fixquick-accounting/releases/download/latest/FixQuick-Accounting.apk'}]};
-assert.match(U.parse(data,U.defaultUrl).download,/v1\.75-build66\/FixQuick-Accounting-1\.75-build66\.apk$/);
-assert.throws(()=>U.parse({...data,prerelease:true},U.defaultUrl));assert.throws(()=>U.parse({version:'1.76',downloadUrl:'https://evil.example/x.apk'},'https://fixq.ir/update.json'));assert.equal(U.parse({version:'1.76',downloadUrl:'https://fixq.ir/app.apk'},'https://fixq.ir/update.json').version,'1.76');
+assert.match(U.parse(data,U.githubUrl).download,/v1\.75-build66\/FixQuick-Accounting-1\.75-build66\.apk$/);
+assert.throws(()=>U.parse({...data,prerelease:true},U.githubUrl));assert.throws(()=>U.parse({version:'1.76',downloadUrl:'https://evil.example/x.apk'},'https://fixq.ir/update.json'));assert.equal(U.parse({version:'1.76',downloadUrl:'https://fixq.ir/app.apk'},'https://fixq.ir/update.json').version,'1.76');
+assert.equal(U.defaultUrl,'https://fixq.ir/accounting-updates/update.json');
+assert.deepEqual({...U.parse({version:'1.76',build:66,downloadUrl:'https://fixq.ir/accounting-updates/FixQuick-Accounting.apk'},U.defaultUrl)},
+ {version:'1.76',build:66,download:'https://fixq.ir/accounting-updates/FixQuick-Accounting.apk'});
 const read=p=>fs.readFileSync(p,'utf8');assert.match(read('www/pages.js'),/data-home="1"[^]*اسناد ثبت‌شده/);assert.match(read('www/ledger.js'),/docGo: d => \{ if\(!routeAllowed\('vouchers'\)\)return/);
 for(const p of ['www/index.html','www/sw.js'])for(const n of ['ras.js','updates.js'])assert.ok(read(p).includes(n));
 console.log('v044: exact weighted dates, leap date, range, invoice filtering, read-only, release version comparison, trusted HTTPS and document shortcut passed');

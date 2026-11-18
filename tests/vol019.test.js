@@ -9,5 +9,5 @@ assert.equal(new Set(keys).size,keys.length);assert.deepEqual([...keys].sort(),O
 for(const k of keys){assert.ok(help[k][0]&&help[k][1].length>20,k);assert.ok(examples[k].length>20,k);}
 assert.ok(keys.length>=65);assert.ok(examples.interestSimple.includes('۵۷۵'));assert.ok(examples.interestCompound.includes('۵۷۸٬۸۱۲٬۵۰۰'));assert.ok(examples.margin.includes('۲۰٪')&&examples.margin.includes('۲۵٪'));
 const pages=read('www/pages.js');for(const token of ['#/settings/backup','menu019Group','data-settings-group','if (isAdmin()) h += ui2SettingsCard()','if ($(\'#restore-file\')) $(\'#restore-file\').onchange = restoreFile','if (can(\'backup\')) h += autoBackupCard()'])assert.ok(pages.includes(token),token);
-assert.match(read('www/sw.js'),/vol(?:019|(?:02[0123456789]|030|031|032|033|034|035|036|037|038|039|040|041|042|043|044|045))/);assert.match(read('www/diag.js'),/APP_VER = '1\.(?:5[0123456789]|60|61|62|63|64|65|66|67|68|69|70|71|72|73|74|75|76)'/);
+assert.match(read('www/sw.js'),/vol(?:019|(?:02[0123456789]|030|031|032|033|034|035|036|037|038|039|040|041|042|043|044|045|046))/);assert.match(read('www/diag.js'),/APP_VER = '1\.(?:5[0123456789]|60|61|62|63|64|65|66|67|68|69|70|71|72|73|74|75|76|77)'/);
 console.log('v019: '+keys.length+' unique help topics and examples, numeric examples, old settings actions / permissions retained, cache version passed');
